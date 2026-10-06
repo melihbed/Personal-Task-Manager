@@ -3,6 +3,10 @@
 use App\Http\Controllers\CalendarSessionController;
 use App\Http\Controllers\CompletedTaskController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GoogleCalendarController;
+use App\Http\Controllers\GoogleOAuthController;
+use App\Http\Controllers\GoogleSyncController;
+use App\Http\Controllers\IntegrationsController;
 use App\Http\Controllers\RoutineController;
 use App\Http\Controllers\RoutineOccurrenceController;
 use App\Http\Controllers\TaskController;
@@ -39,6 +43,15 @@ Route::middleware('auth')->group(function () {
     })->name('responsibilities.show');
 
     Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
+
+    Route::get('/integrations', [IntegrationsController::class, 'index'])->name('integrations.index');
+    Route::get('/integrations/google', [GoogleCalendarController::class, 'show'])->name('google.show');
+    Route::patch('/integrations/google', [GoogleCalendarController::class, 'update'])->name('google.update');
+    Route::delete('/integrations/google', [GoogleCalendarController::class, 'destroy'])->name('google.destroy');
+    Route::get('/integrations/google/redirect', [GoogleOAuthController::class, 'redirect'])->name('google.redirect');
+    Route::get('/integrations/google/callback', [GoogleOAuthController::class, 'callback'])->name('google.callback');
+    Route::post('/integrations/google/sync', [GoogleSyncController::class, 'store'])->name('google.sync.store');
+    Route::delete('/integrations/google/sync', [GoogleSyncController::class, 'destroy'])->name('google.sync.destroy');
 
     Route::post('/routines', [RoutineController::class, 'store'])->name('routines.store');
     Route::patch('/routines/{routine}', [RoutineController::class, 'update'])->name('routines.update');

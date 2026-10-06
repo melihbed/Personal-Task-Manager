@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CalendarSession;
 use App\Models\RoutineOccurrence;
 use App\Models\User;
+use App\Services\GoogleCalendar\GoogleCalendarEvents;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -56,6 +57,14 @@ class DashboardController extends Controller
         $routines = $this->routines($user, $start, $end, $timezone);
 
         return Inertia::render('welcome', [
+            'google' => [
+                'connected' => $user->googleAccount !== null,
+                'needsReconnect' => (bool) $user->googleAccount?->needs_reconnect,
+            ],
+            // Google is called after the page appears, so a slow answer never delays the planner.
+            'googleEvents' => filled($user->googleAccount?->import_calendar_ids) && ! $user->googleAccount->needs_reconnect
+                ? Inertia::defer(fn () => app(GoogleCalendarEvents::class)->between($user, $start->utc(), $end->utc()))
+                : [],
             'routines' => $routines['routines'],
             'routineSessions' => $routines['week'],
             'routinesToday' => $routines['today'],
