@@ -1,5 +1,6 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState, type ReactNode } from 'react';
+import { ToastProvider } from '../components/ui/toast';
 
 type Props = { title: string; children: ReactNode; backHref?: string };
 
@@ -20,6 +21,7 @@ export default function AppLayout({ title, children, backHref }: Props) {
     }, [sidebarOpen]);
 
     return (
+        <ToastProvider>
         <div className="min-h-dvh bg-[var(--pm-background)] text-[var(--pm-text)]">
             <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:p-3">Skip to content</a>
             <div className="flex min-h-dvh">
@@ -92,5 +94,6 @@ export default function AppLayout({ title, children, backHref }: Props) {
                 </div>
             </div>
         </div>
+        </ToastProvider>
     );
 }

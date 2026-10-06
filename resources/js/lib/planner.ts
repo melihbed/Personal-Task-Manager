@@ -1,10 +1,22 @@
 export type PlannerTask = {
     id: number; responsibility_id: number | null; title: string; priority: string;
-    due_at: string | null; completed_at: string | null; calendar_sessions_count: number;
+    estimate_minutes: number | null; due_at: string | null; due_has_time: boolean; completed_at: string | null; calendar_sessions_count: number;
 };
 export type PlannerSession = {
     id: number; task_id: number; title: string; responsibility_name: string;
     color: string | null; completed: boolean; starts_at: string; ends_at: string;
+};
+
+/** A recurring calendar block. days are ISO weekdays: 1 = Monday ... 7 = Sunday. */
+export type PlannerRoutine = {
+    id: number; title: string; responsibility_id: number | null; days: number[];
+    start_time: string; duration_minutes: number; timezone: string;
+    starts_on: string; ends_on: string | null; skipped_dates: string[];
+};
+/** One day of a routine. occurs_on is its original date in the routine's timezone. */
+export type RoutineOccurrence = {
+    routine_id: number; occurs_on: string; title: string; responsibility_name: string;
+    color: string | null; starts_at: string; ends_at: string; completed: boolean; moved: boolean;
 };
 
 export function addDays(date: string, count: number): string {
@@ -58,7 +70,7 @@ export function timeLabel(iso: string, timezone: string): string {
     return new Intl.DateTimeFormat(undefined, { timeZone: timezone, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
 }
 
-export function dayLayout(sessions: PlannerSession[], date: string, timezone: string) {
+export function dayLayout<T extends { starts_at: string; ends_at: string }>(sessions: T[], date: string, timezone: string) {
     const dayStart = localToISO(date, '00:00', timezone);
     const dayEnd = localToISO(addDays(date, 1), '00:00', timezone);
     const minute = (iso: string) => {
