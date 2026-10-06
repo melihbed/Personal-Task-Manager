@@ -97,6 +97,10 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // Laravel writes timestamps as UTC clock strings with no offset. Without this the server's own
+            // timezone (for example America/New_York on a developer machine) reinterprets them, shifting
+            // every saved time by the UTC offset.
+            'timezone' => 'UTC',
         ],
 
         'sqlsrv' => [
