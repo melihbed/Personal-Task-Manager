@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { dueDay, dueMinutes, dueState, formatDue } from '../lib/deadlines';
-import { addDays, dateLabel, dayLayout, overlaps, timeLabel, zonedParts, type PlannerSession, type PlannerTask, type RoutineOccurrence } from '../lib/planner';
+import { addDays, dateLabel, dayLayout, overlaps, timeLabel, zonedParts, type GoogleEvent, type PlannerSession, type PlannerTask, type RoutineOccurrence } from '../lib/planner';
 
 type Props = {
     weekStart: string;
@@ -10,6 +10,9 @@ type Props = {
     /** Occurrences of recurring routines for this week. */
     routineOccurrences: RoutineOccurrence[];
     onSelectRoutine: (occurrence: RoutineOccurrence) => void;
+    /** Events from the user's Google Calendar: read-only, and never dragged. */
+    googleEvents: GoogleEvent[];
+    googleLoading: boolean;
     /** Unfinished tasks that have a deadline. */
     deadlines: PlannerTask[];
     onSelectDeadline: (task: PlannerTask) => void;
@@ -32,6 +35,7 @@ type Block = {
     ends_at: string;
     session?: PlannerSession;
     routine?: RoutineOccurrence;
+    google?: GoogleEvent;
 };
 
 const HOUR_HEIGHT = 56;
@@ -46,6 +50,8 @@ export default function WeeklyCalendar({
     onSelect,
     routineOccurrences,
     onSelectRoutine,
+    googleEvents,
+    googleLoading,
     deadlines,
     onSelectDeadline,
     draggingTask,
@@ -81,9 +87,21 @@ export default function WeeklyCalendar({
             ends_at: routine.ends_at,
             routine,
         })),
+        ...googleEvents
+            .filter(event => !event.all_day && event.starts_at && event.ends_at)
+            .map((event): Block => ({
+                key: `google-${event.id}`,
+                title: event.title,
+                subtitle: event.calendar,
+                color: event.color,
+                completed: false,
+                starts_at: event.starts_at as string,
+                ends_at: event.ends_at as string,
+                google: event,
+            })),
     ];
     const conflicts = new Set(
-        blocks.filter(a => blocks.some(b => a.key !== b.key && overlaps(a.starts_at, a.ends_at, b.starts_at, b.ends_at))).map(block => block.key),
+        blocks.filter(a => blocks.some(b => a.key !== b.key && (!a.google || !b.google) && overlaps(a.starts_at, a.ends_at, b.starts_at, b.ends_at))).map(block => block.key),
     );
 
     // A block that is new, or was moved, pops in. Changing the week or the first render does not animate.
@@ -108,6 +126,9 @@ export default function WeeklyCalendar({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [blockSignatures, weekStart]);
 
+    const googleAllDay = (date: string) => googleEvents.filter(event => event.all_day && event.start_date && event.end_date && event.start_date <= date && date < event.end_date);
+    const hasStrip = dates.some(date => googleAllDay(date).length > 0);
+
     const dateOnlyDeadlines = (date: string) => deadlines.filter(task => !task.due_has_time && dueDay(task, timezone) === date);
     const hasDateOnlyDeadlines = dates.some(date => dateOnlyDeadlines(date).length > 0);
     const weekDeadlineCount = deadlines.filter(task => dates.includes(dueDay(task, timezone) ?? '')).length;
@@ -120,7 +141,9 @@ export default function WeeklyCalendar({
     };
 
     function select(block: Block) {
-        if (block.session) onSelect(block.session);
+        if (block.google) {
+            if (block.google.html_link) window.open(block.google.html_link, '_blank', 'noopener,noreferrer');
+        } else if (block.session) onSelect(block.session);
         else if (block.routine) onSelectRoutine(block.routine);
     }
 
@@ -170,11 +193,12 @@ export default function WeeklyCalendar({
                 ))}
             </div>
 
-            {hasDateOnlyDeadlines && (
+            {(hasDateOnlyDeadlines || hasStrip) && (
                 <div className="flex border-b border-[var(--pm-border)]">
                     <div className="flex w-14 shrink-0 items-center justify-end pr-2 text-[10px] text-[var(--pm-muted)]">Due</div>
                     {dates.map(date => {
                         const items = dateOnlyDeadlines(date);
+                        const allDay = googleAllDay(date);
 
                         return (
                             <div key={date} className={`min-w-0 flex-1 space-y-1 border-l border-[var(--pm-border)] p-1 ${selected === date ? 'block' : 'hidden md:block'}`}>
@@ -192,6 +216,22 @@ export default function WeeklyCalendar({
                                 ))}
                                 {items.length > 2 && (
                                     <p className="px-1 text-[10px] text-[var(--pm-muted)]" title={items.slice(2).map(task => task.title).join(', ')}>+{items.length - 2} more</p>
+                                )}
+                                {allDay.slice(0, 2).map(event => (
+                                    <button
+                                        key={event.id}
+                                        type="button"
+                                        onClick={() => { if (event.html_link) window.open(event.html_link, '_blank', 'noopener,noreferrer'); }}
+                                        title={`${event.title} · ${event.calendar} (Google Calendar)`}
+                                        aria-label={`All day: ${event.title}, from Google Calendar`}
+                                        className="pm-due w-full"
+                                        style={{ borderLeft: `3px solid ${event.color ?? 'var(--pm-muted)'}` }}
+                                    >
+                                        <span className="pm-due__text"><span className="mr-1 font-semibold">G</span>{event.title}</span>
+                                    </button>
+                                ))}
+                                {allDay.length > 2 && (
+                                    <p className="px-1 text-[10px] text-[var(--pm-muted)]" title={allDay.slice(2).map(event => event.title).join(', ')}>+{allDay.length - 2} more from Google</p>
                                 )}
                             </div>
                         );
@@ -234,7 +274,9 @@ export default function WeeklyCalendar({
                             {dayLayout(blocks, date, timezone).map(({ session: block, start, end, lane, laneCount }) => {
                                 const overlapping = conflicts.has(block.key);
                                 const range = `${timeLabel(block.starts_at, timezone)} to ${timeLabel(block.ends_at, timezone)}`;
-                                const palette = block.routine
+                                const palette = block.google
+                                    ? 'border-[#d3d6d9] bg-[#f1f3f4] text-[var(--pm-text)]'
+                                    : block.routine
                                     ? 'border-[#c3d5e6] bg-[#eaf1f8] text-[var(--pm-text)]'
                                     : block.completed ? 'border-[#e7c5b2] bg-slate-100 text-[var(--pm-muted)]' : 'border-[#e7c5b2] bg-[#f6e8df] text-[var(--pm-text)]';
 
@@ -243,7 +285,7 @@ export default function WeeklyCalendar({
                                         key={block.key}
                                         role="button"
                                         tabIndex={0}
-                                        draggable
+                                        draggable={!block.google}
                                         onClick={() => select(block)}
                                         onKeyDown={event => {
                                             if (event.key === 'Enter' || event.key === ' ') {
@@ -262,9 +304,9 @@ export default function WeeklyCalendar({
                                             setDraggingBlock(null);
                                             setHover(null);
                                         }}
-                                        title={`${block.title} · ${range.replace(' to ', '–')}${block.routine ? ' · Repeats' : ''}${overlapping ? ' · Overlap' : ''}`}
-                                        aria-label={`${block.title}, ${range}${block.routine ? ', repeats' : ''}${overlapping ? ', overlaps another event' : ''}`}
-                                        className={`pm-calendar-session absolute cursor-grab overflow-hidden rounded-lg border px-1.5 py-1 text-left text-[10px] leading-tight ${draggingBlock?.block.key === block.key ? 'opacity-40' : ''} ${popping.has(signature(block)) ? 'pm-pop' : ''} ${palette} ${overlapping ? '!border-amber-600' : ''}`}
+                                        title={`${block.title} · ${range.replace(' to ', '–')}${block.routine ? ' · Repeats' : ''}${block.google ? ' · Google Calendar' : ''}${overlapping ? ' · Overlap' : ''}`}
+                                        aria-label={`${block.title}, ${range}${block.routine ? ', repeats' : ''}${block.google ? ', from Google Calendar' : ''}${overlapping ? ', overlaps another event' : ''}`}
+                                        className={`pm-calendar-session absolute ${block.google ? 'cursor-pointer' : 'cursor-grab'} overflow-hidden rounded-lg border px-1.5 py-1 text-left text-[10px] leading-tight ${draggingBlock?.block.key === block.key ? 'opacity-40' : ''} ${popping.has(signature(block)) ? 'pm-pop' : ''} ${palette} ${overlapping ? '!border-amber-600' : ''}`}
                                         style={{
                                             top: start / 60 * HOUR_HEIGHT,
                                             height: Math.max(18, (end - start) / 60 * HOUR_HEIGHT - 2),
@@ -274,7 +316,7 @@ export default function WeeklyCalendar({
                                             borderLeftColor: overlapping ? '#b45309' : block.color ?? 'var(--pm-accent)',
                                         }}
                                     >
-                                        <span className={`block truncate font-semibold ${block.completed ? 'line-through' : ''}`}>{block.routine && '↻ '}{block.title}</span>
+                                        <span className={`block truncate font-semibold ${block.completed ? 'line-through' : ''}`}>{block.routine && '↻ '}{block.google && <span className="mr-1 text-[var(--pm-muted)]">G</span>}{block.title}</span>
                                         {end - start >= 40 && <span className="mt-1 block truncate">{timeLabel(block.starts_at, timezone)}</span>}
                                         {end - start >= 75 && <span className="mt-1 block truncate opacity-70">{block.subtitle}</span>}
                                         {overlapping && end - start >= 55 && <span className="mt-1 block font-medium text-amber-800">Overlap</span>}
@@ -308,7 +350,8 @@ export default function WeeklyCalendar({
 
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--pm-border)] px-4 py-3 text-xs text-[var(--pm-muted)]">
                 <span>
-                    {sessions.length} work {sessions.length === 1 ? 'session' : 'sessions'} · {routineOccurrences.length} routine {routineOccurrences.length === 1 ? 'event' : 'events'} · {weekDeadlineCount} {weekDeadlineCount === 1 ? 'deadline' : 'deadlines'} this week
+                    {sessions.length} work {sessions.length === 1 ? 'session' : 'sessions'} · {routineOccurrences.length} routine {routineOccurrences.length === 1 ? 'event' : 'events'} · {weekDeadlineCount} {weekDeadlineCount === 1 ? 'deadline' : 'deadlines'}{googleEvents.length > 0 && ` · ${googleEvents.length} from Google`} this week
+                    {googleLoading && <span className="ml-2 animate-pulse">Loading Google events…</span>}
                 </span>
                 <span>{conflicts.size ? `${conflicts.size} overlapping` : 'No overlaps'} · {timezone.replaceAll('_', ' ')}</span>
             </div>

@@ -7,6 +7,13 @@ export type PlannerSession = {
     color: string | null; completed: boolean; starts_at: string; ends_at: string;
 };
 
+/** An event from the user's Google Calendar, shown read-only. An all-day event's end_date is exclusive. */
+export type GoogleEvent = {
+    id: string; title: string; calendar: string; color: string | null; all_day: boolean;
+    starts_at: string | null; ends_at: string | null; start_date: string | null; end_date: string | null;
+    html_link: string | null;
+};
+
 /** A recurring calendar block. days are ISO weekdays: 1 = Monday ... 7 = Sunday. */
 export type PlannerRoutine = {
     id: number; title: string; responsibility_id: number | null; days: number[];
