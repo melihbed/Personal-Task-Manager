@@ -57,8 +57,8 @@ class DashboardController extends Controller
             'responsibilities' => $responsibilities,
             'tasks' => $tasks,
             'sessions' => $sessions,
-            'weekStart' => $start->format('Y-m-d'), '
-            timezone' => $timezone,
+            'weekStart' => $start->format('Y-m-d'),
+            'timezone' => $timezone,
         ]);
     }
 }
