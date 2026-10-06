@@ -8,10 +8,10 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property int $id
@@ -42,6 +42,7 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
     public function responsibilities(): HasMany
     {
         return $this->hasMany(Responsibility::class);
@@ -50,5 +51,10 @@ class User extends Authenticatable
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class);
+    }
+
+    public function routines(): HasMany
+    {
+        return $this->hasMany(Routine::class);
     }
 }

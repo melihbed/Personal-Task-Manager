@@ -3,6 +3,8 @@
 use App\Http\Controllers\CalendarSessionController;
 use App\Http\Controllers\CompletedTaskController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\RoutineController;
+use App\Http\Controllers\RoutineOccurrenceController;
 use App\Http\Controllers\TaskController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -37,6 +39,13 @@ Route::middleware('auth')->group(function () {
     })->name('responsibilities.show');
 
     Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
+
+    Route::post('/routines', [RoutineController::class, 'store'])->name('routines.store');
+    Route::patch('/routines/{routine}', [RoutineController::class, 'update'])->name('routines.update');
+    Route::delete('/routines/{routine}', [RoutineController::class, 'destroy'])->name('routines.destroy');
+    Route::patch('/routines/{routine}/occurrences/{date}', [RoutineOccurrenceController::class, 'update'])
+        ->where('date', '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        ->name('routines.occurrences.update');
 
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
     Route::delete('/completed-tasks', [CompletedTaskController::class, 'destroy'])->name('completed-tasks.destroy');

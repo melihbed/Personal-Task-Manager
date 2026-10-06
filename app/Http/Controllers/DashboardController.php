@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\CalendarSession;
+use App\Models\RoutineOccurrence;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -51,7 +53,12 @@ class DashboardController extends Controller
                 'ends_at' => $session->ends_at->utc()->toIso8601String(),
             ]);
 
+        $routines = $this->routines($user, $start, $end, $timezone);
+
         return Inertia::render('welcome', [
+            'routines' => $routines['routines'],
+            'routineSessions' => $routines['week'],
+            'routinesToday' => $routines['today'],
             'name' => $user->name,
             'email' => $user->email,
             'responsibilities' => $responsibilities,
@@ -60,5 +67,69 @@ class DashboardController extends Controller
             'weekStart' => $start->format('Y-m-d'),
             'timezone' => $timezone,
         ]);
+    }
+
+    /**
+     * The user's routines, and their occurrences for the visible week and for today.
+     *
+     * @return array{routines: list<array<string, mixed>>, week: list<array<string, mixed>>, today: list<array<string, mixed>>}
+     */
+    private function routines(User $user, CarbonImmutable $weekStart, CarbonImmutable $weekEnd, string $timezone): array
+    {
+        $todayStart = CarbonImmutable::now($timezone)->startOfDay();
+        $todayEnd = $todayStart->addDay();
+        $from = $weekStart->min($todayStart)->utc();
+        $to = $weekEnd->max($todayEnd)->utc();
+
+        $routines = $user->routines()
+            ->where(function ($query) {
+                $query->whereNull('responsibility_id')->orWhereHas('responsibility', function ($responsibility) {
+                    $responsibility->whereNull('archived_at');
+                });
+            })
+            ->with([
+                'responsibility:id,name,color',
+                // Exceptions near the window, plus any moved into it from further away.
+                'occurrences' => fn ($query) => $query->where(function ($inner) use ($from, $to) {
+                    $inner->whereBetween('occurs_on', [$from->subDays(8)->toDateString(), $to->addDays(8)->toDateString()])
+                        ->orWhere(fn ($moved) => $moved->where('starts_at', '<', $to)->where('ends_at', '>', $from));
+                }),
+            ])
+            ->orderBy('title')
+            ->get();
+
+        $skipped = RoutineOccurrence::whereIn('routine_id', $routines->modelKeys())
+            ->where('skipped', true)
+            ->where('occurs_on', '>=', $todayStart->toDateString())
+            ->orderBy('occurs_on')
+            ->get()
+            ->groupBy('routine_id');
+
+        $expand = fn (CarbonImmutable $windowStart, CarbonImmutable $windowEnd) => $routines
+            ->flatMap(fn ($routine) => collect($routine->occurrencesBetween($windowStart, $windowEnd))->map(fn (array $occurrence) => [
+                ...$occurrence,
+                'responsibility_name' => $routine->responsibility?->name ?? 'Inbox',
+                'color' => $routine->responsibility?->color,
+            ]))
+            ->sortBy('starts_at')
+            ->values()
+            ->all();
+
+        return [
+            'routines' => $routines->map(fn ($routine) => [
+                'id' => $routine->id,
+                'title' => $routine->title,
+                'responsibility_id' => $routine->responsibility_id,
+                'days' => $routine->days,
+                'start_time' => substr($routine->start_time, 0, 5),
+                'duration_minutes' => $routine->duration_minutes,
+                'timezone' => $routine->timezone,
+                'starts_on' => $routine->starts_on->toDateString(),
+                'ends_on' => $routine->ends_on?->toDateString(),
+                'skipped_dates' => ($skipped->get($routine->id) ?? collect())->map(fn ($occurrence) => $occurrence->occurs_on->toDateString())->values()->all(),
+            ])->values()->all(),
+            'week' => $expand($weekStart->utc(), $weekEnd->utc()),
+            'today' => $expand($todayStart->utc(), $todayEnd->utc()),
+        ];
     }
 }
