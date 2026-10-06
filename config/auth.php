@@ -36,9 +36,19 @@ return [
     | Supported: "session"
     |
     */
-
+    /*
+     * A Guard represents an entry checkpoint or authentication method for a specific part
+     * of your application. You can define multiple guards for different types of access
+     * (e.g., web for traditional website users, api for mobile app endpoints, or admin
+     * for an admin portal).
+     */
     'guards' => [
         'web' => [
+            /*
+             * The Driver defines how the user's state is persisted between HTTP requests:
+             * session (used here): Keeps the user logged in using browser cookies and server-side session storage. Standard for regular websites.
+             * token / sanctum / jwt: Used for APIs where the client sends an API token in the Authorization header on every request instead of using cookies.
+             */
             'driver' => 'session',
             'provider' => 'users',
         ],

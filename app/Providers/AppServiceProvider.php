@@ -36,13 +36,11 @@ class AppServiceProvider extends ServiceProvider
         DB::prohibitDestructiveCommands(
             app()->isProduction(),
         );
-
+        // The password is minimum 15 char long with no forced symbol or case rules and has breached password check.
         Password::defaults(fn (): ?Password => app()->isProduction()
-            ? Password::min(12)
-                ->mixedCase()
+            ? Password::min(15)
                 ->letters()
                 ->numbers()
-                ->symbols()
                 ->uncompromised()
             : null,
         );
