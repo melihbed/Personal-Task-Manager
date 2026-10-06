@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Observers\TaskObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+#[ObservedBy([TaskObserver::class])]
 class Task extends Model
 {
     protected $fillable = ['title', 'notes', 'due_at', 'due_has_time', 'priority', 'estimate_minutes'];

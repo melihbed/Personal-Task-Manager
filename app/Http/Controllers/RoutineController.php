@@ -27,11 +27,12 @@ class RoutineController extends Controller
     {
         $record = $request->user()->routines()->findOrFail($routine);
 
+        // Restore moved days first: saving the routine queues the Google sync, which must see the final state.
+        $record->occurrences()->whereNotNull('starts_at')->update(['starts_at' => null, 'ends_at' => null]);
+
         $record->fill($this->attributes($request));
         $record->responsibility_id = $request->validated('responsibility_id');
         $record->save();
-
-        $record->occurrences()->whereNotNull('starts_at')->update(['starts_at' => null, 'ends_at' => null]);
 
         return back();
     }

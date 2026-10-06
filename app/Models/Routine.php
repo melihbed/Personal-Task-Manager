@@ -2,13 +2,16 @@
 
 namespace App\Models;
 
+use App\Observers\RoutineObserver;
 use Carbon\CarbonImmutable;
 use Database\Factories\RoutineFactory;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+#[ObservedBy([RoutineObserver::class])]
 class Routine extends Model
 {
     /** @use HasFactory<RoutineFactory> */

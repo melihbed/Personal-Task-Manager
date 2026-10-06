@@ -21,7 +21,8 @@ class CompletedTaskController extends Controller
                     $responsibility->whereNull('archived_at');
                 });
             })
-            ->delete();
+            ->get()
+            ->each->delete();
 
         return back();
     }
