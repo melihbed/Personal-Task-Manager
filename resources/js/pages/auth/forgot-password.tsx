@@ -58,7 +58,15 @@ export default function ForgotPassword() {
                         disabled={processing}
                         className="w-full rounded-lg cursor-pointer bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-700 disabled:opacity-50"
                     >
-                        {processing ? 'Sending…' : 'Email reset link'}
+                        {processing ? (
+                            <span
+                                role="status"
+                                aria-label="Sending reset link"
+                                className="mx-auto block size-5 animate-spin rounded-full border-2 border-white border-t-transparent"
+                            />
+                        ) : (
+                            'Email reset link'
+                        )}
                     </button>
                 </form>
 

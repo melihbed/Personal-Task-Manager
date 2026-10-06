@@ -111,7 +111,15 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                         disabled={processing}
                         className="w-full rounded-lg bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-700 disabled:opacity-50"
                     >
-                        {processing ? 'Resetting…' : 'Reset password'}
+                        {processing ? (
+                            <span
+                                role="status"
+                                aria-label="Resetting password"
+                                className="mx-auto block size-5 animate-spin rounded-full border-2 border-white border-t-transparent"
+                            />
+                        ) : (
+                            'Reset password'
+                        )}
                     </button>
                 </form>
 
