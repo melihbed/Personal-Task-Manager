@@ -1,18 +1,24 @@
 import { Link, useForm } from '@inertiajs/react';
 import type { FormEvent } from 'react';
 
-export default function Login() {
+type ResetPasswordProps = {
+    token: string;
+    email: string;
+};
+
+export default function ResetPassword({ token, email }: ResetPasswordProps) {
     const { data, setData, post, processing, errors, reset } = useForm({
-        email: '',
+        token,
+        email,
         password: '',
-        remember: false,
+        password_confirmation: '',
     });
 
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
-        post('/login', {
-            onFinish: () => reset('password'),
+        post('/reset-password', {
+            onFinish: () => reset('password', 'password_confirmation'),
         });
     }
 
@@ -22,9 +28,9 @@ export default function Login() {
     return (
         <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6 text-slate-900">
             <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm">
-                <h1 className="text-2xl font-semibold">Welcome back</h1>
+                <h1 className="text-2xl font-semibold">Reset your password</h1>
                 <p className="mt-2 text-sm text-slate-600">
-                    Log in to your personal task manager.
+                    Choose a new password for your account.
                 </p>
 
                 <form onSubmit={submit} className="mt-6 space-y-4">
@@ -48,16 +54,21 @@ export default function Login() {
                                 {errors.email}
                             </p>
                         )}
+                        {errors.token && (
+                            <p className="mt-1 text-sm text-red-600">
+                                {errors.token}
+                            </p>
+                        )}
                     </div>
 
                     <div>
                         <label htmlFor="password" className="text-sm font-medium">
-                            Password
+                            New password
                         </label>
                         <input
                             id="password"
                             type="password"
-                            autoComplete="current-password"
+                            autoComplete="new-password"
                             value={data.password}
                             onChange={(event) =>
                                 setData('password', event.target.value)
@@ -70,36 +81,43 @@ export default function Login() {
                                 {errors.password}
                             </p>
                         )}
-                        <Link href="/forgot-password" className="flex justify-end text-sm font-medium mt-2 text-blue-700">
-                            Forgot password
-                        </Link>
-
                     </div>
 
-                    <label className="flex items-center gap-2 text-sm">
+                    <div>
+                        <label
+                            htmlFor="password_confirmation"
+                            className="text-sm font-medium"
+                        >
+                            Confirm password
+                        </label>
                         <input
-                            type="checkbox"
-                            checked={data.remember}
+                            id="password_confirmation"
+                            type="password"
+                            autoComplete="new-password"
+                            value={data.password_confirmation}
                             onChange={(event) =>
-                                setData('remember', event.target.checked)
+                                setData(
+                                    'password_confirmation',
+                                    event.target.value,
+                                )
                             }
+                            className={inputClass}
+                            required
                         />
-                        Remember me
-                    </label>
+                    </div>
 
                     <button
                         type="submit"
                         disabled={processing}
                         className="w-full rounded-lg bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-700 disabled:opacity-50"
                     >
-                        {processing ? 'Logging in…' : 'Log in'}
+                        {processing ? 'Resetting…' : 'Reset password'}
                     </button>
                 </form>
 
                 <p className="mt-6 text-center text-sm text-slate-600">
-                    Need an account?{' '}
-                    <Link href="/register" className="font-medium text-blue-700">
-                        Register
+                    <Link href="/login" className="font-medium text-blue-700">
+                        Back to log in
                     </Link>
                 </p>
             </div>
