@@ -1,13 +1,19 @@
-import { router, useForm } from '@inertiajs/react';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { router } from '@inertiajs/react';
+import { useEffect, useRef, useState } from 'react';
 import AppLayout from '../../../resources/js/layouts/app-layout';
-import TaskGroup from '../../../resources/js/components/task-group';
+import ResponsibilityDialog from '../components/responsibility-dialog';
+import RoutineDialog from '../components/routine-dialog';
+import RoutineMoveDialog from '../components/routine-move-dialog';
+import RoutineOccurrenceDialog from '../components/routine-occurrence-dialog';
+import TasksCard from '../components/tasks/tasks-card';
 import WeeklyCalendar from '../../../resources/js/components/weekly-calendar';
 import ScheduleDialog from '../../../resources/js/components/schedule-dialog';
-import { addDays, dateLabel, timeLabel, zonedParts, type PlannerSession, type PlannerTask } from '../lib/planner';
+import { addDays, dateLabel, localToISO, overlaps, timeLabel, zonedParts, type PlannerRoutine, type PlannerSession, type PlannerTask, type RoutineOccurrence } from '../lib/planner';
 
 type Responsibility = { id: number; name: string; description: string | null; color: string | null };
-type Props = { name: string; email: string; responsibilities: Responsibility[]; tasks: PlannerTask[]; sessions: PlannerSession[]; weekStart: string; timezone: string };
+type Props = { name: string; email: string; responsibilities: Responsibility[]; tasks: PlannerTask[]; sessions: PlannerSession[]; routines: PlannerRoutine[]; routineSessions: RoutineOccurrence[]; routinesToday: RoutineOccurrence[]; weekStart: string; timezone: string };
+
+const clock24 = (value: number) => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
 
 function SessionDialog({ session, timezone, onClose, onEdit }: { session: PlannerSession; timezone: string; onClose: () => void; onEdit: ()=> void;}) {
     const ref = useRef<HTMLDialogElement>(null);
@@ -54,6 +60,9 @@ export default function Welcome({
                                     responsibilities,
                                     tasks,
                                     sessions,
+                                    routines = [],
+                                    routineSessions = [],
+                                    routinesToday = [],
                                     weekStart,
                                     timezone = 'America/New_York',
                                 }: Props) {
@@ -70,8 +79,14 @@ export default function Welcome({
         ? tasks.find(task => task.id === editingSession.task_id)
         : undefined;
 
-    const [addOpen, setAddOpen] = useState(false);
-    const form = useForm({ name: '', description: '' });
+    const [responsibilityDialogOpen, setResponsibilityDialogOpen] = useState(false);
+    const [draggingTask, setDraggingTask] = useState<PlannerTask | null>(null);
+    const [routineDialog, setRoutineDialog] = useState<{ id: number | null } | null>(null);
+    const [selectedOccurrence, setSelectedOccurrence] = useState<RoutineOccurrence | null>(null);
+    const [routineMove, setRoutineMove] = useState<{ occurrence: RoutineOccurrence; startsAt: string; endsAt: string } | null>(null);
+    const editingRoutine = routineDialog?.id != null ? routines.find(routine => routine.id === routineDialog.id) : undefined;
+    const [planDraft, setPlanDraft] = useState<{ task: PlannerTask; session?: PlannerSession; initial: { date: string; startTime: string; endDate: string; endTime: string } } | null>(null);
+    const deadlines = tasks.filter(task => task.due_at && !task.completed_at);
     const today = zonedParts(new Date(), timezone).date;
     const weekEnd = addDays(weekStart, 6);
     const scheduleDate = today >= weekStart && today <= weekEnd ? today : weekStart;
@@ -82,23 +97,149 @@ export default function Welcome({
             'Europe/Istanbul',
             'UTC',
         ]),
-    );    function navigate(week: string | null, zone = timezone) {
+    );    /** Drop a task on the calendar: reserve its estimate (30 min by default) at the dropped time, or open the dialog if it clashes. */
+    function planByDrop(date: string, minutes: number) {
+        const task = draggingTask;
+        setDraggingTask(null);
+        if (!task) return;
+
+        const clockTime = clock24;
+        const duration = task.estimate_minutes ?? 30;
+        let startsAt = '';
+        let endsAt = '';
+        let initial = { date, startTime: clockTime(minutes), endDate: date, endTime: clockTime(Math.min(minutes + duration, 1439)) };
+
+        try {
+            startsAt = localToISO(date, initial.startTime, timezone);
+            endsAt = new Date(Date.parse(startsAt) + duration * 60000).toISOString();
+            const end = zonedParts(new Date(endsAt), timezone);
+            initial = { ...initial, endDate: end.date, endTime: end.time };
+        } catch {
+            startsAt = '';
+        }
+
+        if (!startsAt || sessions.some(session => overlaps(startsAt, endsAt, session.starts_at, session.ends_at))) {
+            setPlanDraft({ task, initial });
+            return;
+        }
+
+        router.post(`/tasks/${task.id}/calendar-sessions`, { starts_at: startsAt, ends_at: endsAt, allow_overlap: false }, {
+            preserveScroll: true,
+            onError: () => setPlanDraft({ task, initial }),
+        });
+    }
+    /** Drag a scheduled session to a new day or time, keeping its length; open the dialog if it clashes or fails. */
+    function moveSession(session: PlannerSession, date: string, minutes: number) {
+        const task = tasks.find(candidate => candidate.id === session.task_id);
+        const lengthMs = Date.parse(session.ends_at) - Date.parse(session.starts_at);
+        let startsAt = '';
+        let endsAt = '';
+        let initial = { date, startTime: clock24(minutes), endDate: date, endTime: clock24(Math.min(minutes + lengthMs / 60000, 1439)) };
+
+        try {
+            startsAt = localToISO(date, initial.startTime, timezone);
+            endsAt = new Date(Date.parse(startsAt) + lengthMs).toISOString();
+            const end = zonedParts(new Date(endsAt), timezone);
+            initial = { ...initial, endDate: end.date, endTime: end.time };
+        } catch {
+            startsAt = '';
+        }
+
+        if (startsAt && Date.parse(startsAt) === Date.parse(session.starts_at)) return;
+
+        const review = () => { if (task) setPlanDraft({ task, session, initial }); };
+
+        if (!startsAt || sessions.some(other => other.id !== session.id && overlaps(startsAt, endsAt, other.starts_at, other.ends_at))) {
+            review();
+            return;
+        }
+
+        router.patch(`/calendar-sessions/${session.id}`, { starts_at: startsAt, ends_at: endsAt, allow_overlap: false }, {
+            preserveScroll: true,
+            onError: review,
+        });
+    }
+    /** A routine occurrence was dropped on a new day or time (its length is kept). Ask whether to move only that day or all of them. */
+    function moveRoutine(occurrence: RoutineOccurrence, date: string, minutes: number) {
+        const lengthMs = Date.parse(occurrence.ends_at) - Date.parse(occurrence.starts_at);
+
+        try {
+            const startsAt = localToISO(date, clock24(minutes), timezone);
+
+            if (Date.parse(startsAt) === Date.parse(occurrence.starts_at)) return;
+
+            setRoutineMove({ occurrence, startsAt, endsAt: new Date(Date.parse(startsAt) + lengthMs).toISOString() });
+        } catch {
+            setSelectedOccurrence(occurrence);
+        }
+    }
+    function navigate(week: string | null, zone = timezone) {
         router.get('/', { ...(week ? { week } : {}), timezone: zone }, { preserveScroll: true });
     }
-    function createResponsibility(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        form.post('/responsibilities', { preserveScroll: true, onSuccess: () => { form.reset(); setAddOpen(false); } });
-    }
     return <AppLayout title="Dashboard">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-2xl font-medium tracking-tight">Hi {name}.</h2><p className="mt-1 text-sm text-[var(--pm-muted)]">Choose what matters. Give it time this week.</p></div><label className="flex items-center gap-2 text-xs text-[var(--pm-muted)]">Timezone<select aria-label="Calendar timezone" value={timezone} onChange={e => navigate(weekStart, e.target.value)} className="max-w-52 rounded-lg border border-[var(--pm-border)] bg-white px-3 py-2 text-[var(--pm-text)]">{timezoneOptions.map(zone => <option key={zone} value={zone}>{zone.replaceAll('_', ' ')}</option>)}</select></label></div>
-        <div className="grid items-start gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
-            <section aria-labelledby="tasks-title" className="overflow-hidden rounded-3xl border border-[var(--pm-border)] bg-white">
-                <div className="flex items-center justify-between gap-3 border-b border-[var(--pm-border)] px-5 py-5"><div><h2 id="tasks-title" className="font-medium">Tasks to plan</h2><p className="mt-1 text-xs text-[var(--pm-muted)]">{tasks.filter(task => !task.completed_at).length} unfinished · Plan adds a work session</p></div><button type="button" onClick={() => setAddOpen(!addOpen)} aria-expanded={addOpen} aria-controls="add-responsibility" className="pm-button pm-button--secondary pm-button--small">+ Group</button></div>
-                {addOpen && <form id="add-responsibility" onSubmit={createResponsibility} className="space-y-3 border-b border-[var(--pm-border)] bg-[var(--pm-background)]/40 p-4"><label className="block text-xs font-medium" htmlFor="group-name">Responsibility name</label><input autoFocus id="group-name" required maxLength={255} className="pm-input" value={form.data.name} onChange={e => form.setData('name', e.target.value)} placeholder="Capstone, UAMA…" /><label className="block text-xs" htmlFor="group-description">Description (optional)</label><textarea id="group-description" maxLength={5000} rows={2} className="pm-input" value={form.data.description} onChange={e => form.setData('description', e.target.value)} />{Object.values(form.errors).map((error, i) => <p key={i} role="alert" className="text-xs text-red-700">{error}</p>)}<button disabled={form.processing} className="pm-button pm-button--small" type="submit">{form.processing ? 'Saving…' : 'Add responsibility'}</button></form>}
-                <div className="max-h-[720px] overflow-y-auto"><TaskGroup id={null} name="Inbox" color={null} tasks={tasks.filter(task => task.responsibility_id === null)} timezone={timezone} onSchedule={setSelectedTask} />{responsibilities.map(group => <TaskGroup key={group.id} id={group.id} name={group.name} color={group.color} tasks={tasks.filter(task => task.responsibility_id === group.id)} timezone={timezone} onSchedule={setSelectedTask} />)}</div>
-            </section>
-            <section className="min-w-0" aria-labelledby="week-title"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 id="week-title" className="text-lg font-medium">{dateLabel(weekStart, { month: 'short', day: 'numeric' })} – {dateLabel(weekEnd, { month: 'short', day: 'numeric', year: 'numeric' })}</h2><p className="mt-1 text-xs text-[var(--pm-muted)]">Monday–Sunday · Click a session to manage it</p></div><div className="pm-button-group"><button type="button" aria-label="Previous week" onClick={() => navigate(addDays(weekStart, -7))} className="pm-button pm-button--secondary pm-button--icon">‹</button><button type="button" onClick={() => navigate(null)} className="pm-button pm-button--secondary">Today</button><button type="button" aria-label="Next week" onClick={() => navigate(addDays(weekStart, 7))} className="pm-button pm-button--secondary pm-button--icon">›</button></div></div><WeeklyCalendar weekStart={weekStart} timezone={timezone} sessions={sessions} onSelect={setSelectedSession} />{sessions.length === 0 && <p className="mt-3 text-sm text-[var(--pm-muted)]">Your week is open. Choose Plan beside a task to reserve time.</p>}</section>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h2 className="text-2xl font-medium tracking-tight">Hi {name}.</h2>
+                <p className="mt-1 text-sm text-[var(--pm-muted)]">Choose what matters. Give it time this week.</p>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-[var(--pm-muted)]">
+                Timezone
+                <select aria-label="Calendar timezone" value={timezone} onChange={e => navigate(weekStart, e.target.value)} className="max-w-52 rounded-lg border cursor-pointer border-[var(--pm-border)] bg-white px-3 py-2 text-[var(--pm-text)]">
+            {timezoneOptions.map(zone =>
+                    <option key={zone} value={zone}>{zone.replaceAll('_', ' ')}
+                    </option>)}
+                </select>
+            </label>
         </div>
+        <div className="grid items-start gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
+            <TasksCard
+                tasks={tasks}
+                responsibilities={responsibilities}
+                routines={routines}
+                routinesToday={routinesToday}
+                timezone={timezone}
+                draggingTaskId={draggingTask?.id ?? null}
+                onSchedule={setSelectedTask}
+                onDragTask={setDraggingTask}
+                onNewRoutine={() => setRoutineDialog({ id: null })}
+                onNewResponsibility={() => setResponsibilityDialogOpen(true)}
+                onEditRoutine={routine => setRoutineDialog({ id: routine.id })}
+                onSelectOccurrence={setSelectedOccurrence}
+            />
+            <section className="min-w-0" aria-labelledby="week-title"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 id="week-title" className="text-lg font-medium">{dateLabel(weekStart, { month: 'short', day: 'numeric' })} – {dateLabel(weekEnd, { month: 'short', day: 'numeric', year: 'numeric' })}</h2><p className="mt-1 text-xs text-[var(--pm-muted)]">Monday–Sunday · Click a session to manage it</p></div><div className="pm-button-group"><button type="button" aria-label="Previous week" onClick={() => navigate(addDays(weekStart, -7))} className="pm-button pm-button--secondary pm-button--icon">‹</button><button type="button" onClick={() => navigate(null)} className="pm-button pm-button--secondary">Today</button><button type="button" aria-label="Next week" onClick={() => navigate(addDays(weekStart, 7))} className="pm-button pm-button--secondary pm-button--icon">›</button></div></div><WeeklyCalendar weekStart={weekStart} timezone={timezone} sessions={sessions} onSelect={setSelectedSession} deadlines={deadlines} onSelectDeadline={setSelectedTask} routineOccurrences={routineSessions} onSelectRoutine={setSelectedOccurrence} draggingTask={draggingTask} onDropTask={planByDrop} onMoveSession={moveSession} onMoveRoutine={moveRoutine} />{sessions.length === 0 && <p className="mt-3 text-sm text-[var(--pm-muted)]">Your week is open. Drag a task here, or choose Plan beside it, to reserve time.</p>}</section>
+        </div>
+        {routineDialog && (routineDialog.id === null || editingRoutine) && (
+            <RoutineDialog
+                key={`routine-${routineDialog.id ?? 'new'}`}
+                routine={editingRoutine}
+                responsibilities={responsibilities}
+                timezone={timezone}
+                onClose={() => setRoutineDialog(null)}
+            />
+        )}
+        {routineMove && routines.some(routine => routine.id === routineMove.occurrence.routine_id) && (
+            <RoutineMoveDialog
+                key={`move-${routineMove.occurrence.routine_id}-${routineMove.occurrence.occurs_on}-${routineMove.startsAt}`}
+                occurrence={routineMove.occurrence}
+                routine={routines.find(routine => routine.id === routineMove.occurrence.routine_id) as PlannerRoutine}
+                startsAt={routineMove.startsAt}
+                endsAt={routineMove.endsAt}
+                timezone={timezone}
+                onClose={() => setRoutineMove(null)}
+            />
+        )}
+        {selectedOccurrence && (
+            <RoutineOccurrenceDialog
+                key={`${selectedOccurrence.routine_id}-${selectedOccurrence.occurs_on}`}
+                occurrence={routineSessions.concat(routinesToday).find(item => item.routine_id === selectedOccurrence.routine_id && item.occurs_on === selectedOccurrence.occurs_on) ?? selectedOccurrence}
+                routine={routines.find(routine => routine.id === selectedOccurrence.routine_id)}
+                timezone={timezone}
+                onEditRoutine={() => { setRoutineDialog({ id: selectedOccurrence.routine_id }); setSelectedOccurrence(null); }}
+                onClose={() => setSelectedOccurrence(null)}
+            />
+        )}
+        {responsibilityDialogOpen && <ResponsibilityDialog existingCount={responsibilities.length} onClose={() => setResponsibilityDialogOpen(false)} />}
+        {planDraft && <ScheduleDialog key={`plan-${planDraft.session?.id ?? 'new'}-${planDraft.task.id}-${planDraft.initial.date}-${planDraft.initial.startTime}`} task={planDraft.task} session={planDraft.session} date={planDraft.initial.date} initial={planDraft.initial} timezone={timezone} sessions={sessions} onClose={() => setPlanDraft(null)} />}
         {selectedTask && <ScheduleDialog key={selectedTask.id} task={selectedTask} date={scheduleDate} timezone={timezone} sessions={sessions} onClose={() => setSelectedTask(null)} />}
         {selectedSession && (
             <SessionDialog

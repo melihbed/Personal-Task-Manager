@@ -2,12 +2,12 @@ import { router } from '@inertiajs/react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { localToISO, overlaps, timeLabel, zonedParts, type PlannerSession, type PlannerTask } from '../lib/planner';
 
-type Props = { task: PlannerTask; date: string; timezone: string; sessions: PlannerSession[]; session?: PlannerSession; onClose: () => void };
+type Props = { task: PlannerTask; date: string; timezone: string; sessions: PlannerSession[]; session?: PlannerSession; initial?: { date: string; startTime: string; endDate: string; endTime: string }; onClose: () => void };
 
-export default function ScheduleDialog({ task, date, timezone, sessions, session, onClose }: Props) {
+export default function ScheduleDialog({ task, date, timezone, sessions, session, initial, onClose }: Props) {
     const dialog = useRef<HTMLDialogElement>(null);
-    const initialStart = session ? zonedParts(new Date(session.starts_at), timezone) : { date, time: '09:00' };
-    const initialEnd = session ? zonedParts(new Date(session.ends_at), timezone) : { date, time: '10:00' };
+    const initialStart = initial ? { date: initial.date, time: initial.startTime } : session ? zonedParts(new Date(session.starts_at), timezone) : { date, time: '09:00' };
+    const initialEnd = initial ? { date: initial.endDate, time: initial.endTime } : session ? zonedParts(new Date(session.ends_at), timezone) : { date, time: '10:00' };
     const [day, setDay] = useState(initialStart.date);
     const [endDay, setEndDay] = useState(initialEnd.date);
     const [startTime, setStartTime] = useState(initialStart.time);
