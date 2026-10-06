@@ -127,7 +127,15 @@ export default function Register() {
                         disabled={processing}
                         className="w-full rounded-lg bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-700 disabled:opacity-50 cursor-pointer"
                     >
-                        {processing ? 'Creating account…' : 'Create account'}
+                        {processing ? (
+                            <span
+                                role="status"
+                                aria-label="Creating account"
+                                className="mx-auto block size-5 animate-spin rounded-full border-2 border-white border-t-transparent"
+                            />
+                        ) : (
+                            'Create account'
+                        )}
                     </button>
                 </form>
 

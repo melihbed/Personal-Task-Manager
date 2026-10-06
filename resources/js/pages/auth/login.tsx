@@ -90,9 +90,17 @@ export default function Login() {
                     <button
                         type="submit"
                         disabled={processing}
-                        className="w-full rounded-lg bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                        className="w-full rounded-lg cursor-pointer bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-700 disabled:opacity-50"
                     >
-                        {processing ? 'Logging in…' : 'Log in'}
+                        {processing ? (
+                            <span
+                                role="status"
+                                aria-label="Logging in"
+                                className="mx-auto block size-5 animate-spin rounded-full border-2 border-white border-t-transparent"
+                            />
+                        ) : (
+                            'Log in'
+                        )}
                     </button>
                 </form>
 
