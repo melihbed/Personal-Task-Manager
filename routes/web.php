@@ -4,6 +4,7 @@ use App\Http\Controllers\CalendarSessionController;
 use App\Http\Controllers\CompletedTaskController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GoogleCalendarController;
+use App\Http\Controllers\GoogleImportController;
 use App\Http\Controllers\GoogleOAuthController;
 use App\Http\Controllers\GoogleSyncController;
 use App\Http\Controllers\IntegrationsController;
@@ -35,7 +36,7 @@ Route::middleware('auth')->group(function () {
         return Inertia::render('responsibilities/show', [
             'responsibility' => $record->only(['id', 'name', 'description']),
             'tasks' => $record->tasks()->where('user_id', $request->user()->id)
-                ->select(['id', 'title', 'priority', 'estimate_minutes', 'due_at', 'due_has_time', 'completed_at'])
+                ->select(['id', 'responsibility_id', 'title', 'notes', 'priority', 'estimate_minutes', 'due_at', 'due_has_time', 'completed_at'])
                 ->withCount('calendarSessions')
                 ->orderByDesc('created_at')->orderByDesc('id')
                 ->get(),
@@ -50,6 +51,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/integrations/google', [GoogleCalendarController::class, 'destroy'])->name('google.destroy');
     Route::get('/integrations/google/redirect', [GoogleOAuthController::class, 'redirect'])->name('google.redirect');
     Route::get('/integrations/google/callback', [GoogleOAuthController::class, 'callback'])->name('google.callback');
+    Route::post('/integrations/google/imports', [GoogleImportController::class, 'store'])->name('google.imports.store');
     Route::post('/integrations/google/sync', [GoogleSyncController::class, 'store'])->name('google.sync.store');
     Route::delete('/integrations/google/sync', [GoogleSyncController::class, 'destroy'])->name('google.sync.destroy');
 

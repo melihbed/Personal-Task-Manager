@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
+use Inertia\Testing\AssertableInertia as Assert;
 
 /*
 |--------------------------------------------------------------------------
@@ -35,19 +36,43 @@ function googleUser(array $account = []): User
 }
 
 /**
- * Pretends to be Google. Created events get ids "evt-1", "evt-2" ...; $failures maps "METHOD fragment"
- * to a status code to return instead.
+ * What the fake Google answers with. Tests can change these midway, for example to simulate an event that was
+ * deleted in Google between two page loads.
+ */
+class GoogleFake
+{
+    /** @var array<string, int> "METHOD fragment" => status to return instead */
+    public static array $failures = [];
+
+    /** @var list<array<string, mixed>> what listing a calendar returns */
+    public static array $events = [];
+
+    /** @var array<string, array<string, mixed>> an event id => the event returned when it is fetched alone */
+    public static array $single = [];
+
+    public static int $created = 0;
+}
+
+/**
+ * Pretends to be Google. Created events get ids "evt-1", "evt-2" ...; $failures maps "METHOD fragment" to a status
+ * code to return instead. $events is what listing a calendar returns; $single maps an event id to the event
+ * returned when it is fetched alone.
  *
  * @param  array<string, int>  $failures
+ * @param  list<array<string, mixed>>  $events
+ * @param  array<string, array<string, mixed>>  $single
  */
-function fakeGoogle(array $failures = [], array $events = []): void
+function fakeGoogle(array $failures = [], array $events = [], array $single = []): void
 {
-    $created = 0;
+    GoogleFake::$failures = $failures;
+    GoogleFake::$events = $events;
+    GoogleFake::$single = $single;
+    GoogleFake::$created = 0;
 
-    Http::fake(function (Request $request) use (&$created, $failures, $events) {
+    Http::fake(function (Request $request) {
         $url = $request->url();
 
-        foreach ($failures as $key => $status) {
+        foreach (GoogleFake::$failures as $key => $status) {
             [$method, $fragment] = explode(' ', $key, 2);
 
             if ($request->method() === $method && str_contains($url, $fragment)) {
@@ -63,10 +88,13 @@ function fakeGoogle(array $failures = [], array $events = []): void
                 ['id' => 'cal-1', 'summary' => 'Planner', 'accessRole' => 'owner', 'backgroundColor' => '#445566'],
                 ['id' => 'holidays', 'summary' => 'Holidays', 'accessRole' => 'reader', 'backgroundColor' => '#778899'],
             ]]),
-            $request->method() === 'POST' && str_ends_with($url, '/events') => Http::response(['id' => 'evt-'.++$created]),
+            $request->method() === 'GET' && preg_match('#/calendars/[^/]+/events/([^/?]+)#', $url, $match) === 1 => isset(GoogleFake::$single[urldecode($match[1])])
+                ? Http::response(GoogleFake::$single[urldecode($match[1])])
+                : Http::response(['error' => ['message' => 'Not Found']], 404),
+            $request->method() === 'POST' && str_ends_with($url, '/events') => Http::response(['id' => 'evt-'.++GoogleFake::$created]),
             $request->method() === 'PATCH' => Http::response(['id' => 'patched']),
             $request->method() === 'DELETE' => Http::response(null, 204),
-            $request->method() === 'GET' && str_contains($url, '/events') => Http::response(['items' => $events]),
+            $request->method() === 'GET' && str_contains($url, '/events') => Http::response(['items' => GoogleFake::$events]),
             default => Http::response([], 404),
         };
     });
@@ -101,4 +129,83 @@ function weeklyRoutine(User $user, array $attributes = []): Routine
 function plannedSessionWithoutObserver(User $user): int
 {
     return CalendarSession::withoutEvents(fn () => plannedSession($user)->id);
+}
+
+/** Every request that changed something in Google (anything but a read). */
+function googleWrites(): Collection
+{
+    return collect(Http::recorded())
+        ->map(fn ($pair) => $pair[0])
+        ->filter(fn (Request $request) => $request->method() !== 'GET' && str_contains($request->url(), 'googleapis.com/calendar'))
+        ->values();
+}
+
+function timedEvent(array $overrides = []): array
+{
+    return array_merge([
+        'id' => 'ev1',
+        'summary' => 'Dentist',
+        'start' => ['dateTime' => '2026-10-07T15:00:00-04:00'],
+        'end' => ['dateTime' => '2026-10-07T16:30:00-04:00'],
+    ], $overrides);
+}
+
+function allDayEvent(array $overrides = []): array
+{
+    return array_merge(['id' => 'ev2', 'summary' => 'Conference', 'start' => ['date' => '2026-10-08'], 'end' => ['date' => '2026-10-10']], $overrides);
+}
+
+function seriesMaster(array $overrides = []): array
+{
+    return array_merge([
+        'id' => 'series1',
+        'summary' => 'Prepare breakfast',
+        'start' => ['dateTime' => '2026-10-06T08:00:00-04:00', 'timeZone' => 'America/New_York'],
+        'end' => ['dateTime' => '2026-10-06T08:45:00-04:00', 'timeZone' => 'America/New_York'],
+        'recurrence' => ['RRULE:FREQ=WEEKLY;BYDAY=TU,TH'],
+    ], $overrides);
+}
+
+function seriesInstance(array $overrides = []): array
+{
+    return array_merge(seriesMaster(['recurrence' => null]), [
+        'id' => 'series1_20261013T120000Z',
+        'recurringEventId' => 'series1',
+        'start' => ['dateTime' => '2026-10-13T08:00:00-04:00'],
+        'end' => ['dateTime' => '2026-10-13T08:45:00-04:00'],
+    ], $overrides);
+}
+
+function importPayload(array $overrides = []): array
+{
+    return array_merge(['calendar_id' => 'primary-id', 'event_id' => 'ev1', 'type' => 'task', 'responsibility_id' => null, 'timezone' => 'America/New_York'], $overrides);
+}
+
+function importer(array $account = []): User
+{
+    return googleUser(array_merge(['import_calendar_ids' => ['primary-id']], $account));
+}
+
+function overlayTitles(User $user): array
+{
+    $titles = [];
+
+    test()->actingAs($user)->get('/?week=2026-10-05&timezone=America/New_York')
+        ->assertInertia(function (Assert $page) use (&$titles) {
+            $page->loadDeferredProps(function (Assert $loaded) use (&$titles) {
+                $titles = collect($loaded->toArray()['props']['googleEvents'] ?? [])->pluck('title')->all();
+            });
+        });
+
+    return $titles;
+}
+
+function overlayEvents(): array
+{
+    return [
+        timedEvent(),
+        allDayEvent(),
+        seriesInstance(),
+        seriesInstance(['id' => 'series1_20261015T120000Z', 'start' => ['dateTime' => '2026-10-15T08:00:00-04:00'], 'end' => ['dateTime' => '2026-10-15T08:45:00-04:00']]),
+    ];
 }

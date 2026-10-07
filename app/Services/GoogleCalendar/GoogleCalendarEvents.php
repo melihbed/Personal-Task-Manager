@@ -3,11 +3,13 @@
 namespace App\Services\GoogleCalendar;
 
 use App\Models\GoogleAccount;
+use App\Models\GoogleEventImport;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * The user's Google events for a time window, shaped for the planner calendar. Events this app created
@@ -19,7 +21,7 @@ class GoogleCalendarEvents
     private const CACHE_SECONDS = 60;
 
     /**
-     * @return list<array{id: string, title: string, calendar: string, color: string|null, all_day: bool, starts_at: string|null, ends_at: string|null, start_date: string|null, end_date: string|null, html_link: string|null}>
+     * @return list<array<string, mixed>>
      */
     public function between(User $user, CarbonImmutable $from, CarbonImmutable $to): array
     {
@@ -31,10 +33,11 @@ class GoogleCalendarEvents
 
         $client = new GoogleCalendarClient($account);
         $calendars = $this->calendars($account, $client);
+        $imported = $this->imported($user);
         $events = [];
 
         foreach ($account->import_calendar_ids as $calendarId) {
-            $key = "google-events:{$account->id}:".sha1($calendarId).":{$from->toDateString()}:{$to->toDateString()}";
+            $key = "google-events:{$account->id}:v".self::version($account).':'.sha1($calendarId).":{$from->toDateString()}:{$to->toDateString()}";
 
             try {
                 $items = Cache::remember($key, self::CACHE_SECONDS, fn () => $client->events($calendarId, $from, $to));
@@ -45,7 +48,7 @@ class GoogleCalendarEvents
             }
 
             foreach ($items as $item) {
-                $event = $this->event($item, $calendarId, $calendars[$calendarId] ?? null);
+                $event = $this->event($item, $calendarId, $calendars[$calendarId] ?? null, $imported);
 
                 if ($event !== null) {
                     $events[] = $event;
@@ -58,14 +61,31 @@ class GoogleCalendarEvents
         return $events;
     }
 
+    /** Drop every cached week for this account, so a change made through the app shows straight away. */
+    public static function forget(GoogleAccount $account): void
+    {
+        Cache::forever("google-events-version:{$account->id}", self::version($account) + 1);
+    }
+
+    private static function version(GoogleAccount $account): int
+    {
+        return (int) Cache::get("google-events-version:{$account->id}", 0);
+    }
+
     /**
      * @param  array<string, mixed>  $item
      * @param  array{name: string, color: string|null}|null  $calendar
+     * @param  array<string, true>  $imported  keys of events already copied into the planner
      * @return array<string, mixed>|null
      */
-    private function event(array $item, string $calendarId, ?array $calendar): ?array
+    private function event(array $item, string $calendarId, ?array $calendar, array $imported): ?array
     {
         if (($item['status'] ?? '') === 'cancelled' || isset($item['extendedProperties']['private'][GoogleEventMapper::MARKER])) {
+            return null;
+        }
+
+        // Already copied into the planner, as itself or as the repeating series it belongs to.
+        if (isset($imported[$calendarId.'|'.$item['id']]) || (isset($item['recurringEventId']) && isset($imported[$calendarId.'|'.$item['recurringEventId']]))) {
             return null;
         }
 
@@ -73,6 +93,12 @@ class GoogleCalendarEvents
 
         return [
             'id' => $calendarId.'|'.$item['id'],
+            'calendar_id' => $calendarId,
+            'event_id' => $item['id'],
+            'recurring_event_id' => $item['recurringEventId'] ?? null,
+            'location' => isset($item['location']) ? Str::limit(trim($item['location']), 200) : null,
+            'description' => $this->plainText($item['description'] ?? null),
+            'guests' => count($item['attendees'] ?? []),
             'title' => $item['summary'] ?? '(No title)',
             'calendar' => $calendar['name'] ?? $calendarId,
             'color' => $calendar['color'] ?? null,
@@ -110,5 +136,29 @@ class GoogleCalendarEvents
         }
 
         return $byId;
+    }
+
+    /**
+     * Keys ("calendar|event") of the Google events the user has copied into the planner.
+     *
+     * @return array<string, true>
+     */
+    private function imported(User $user): array
+    {
+        return $user->googleEventImports()->get(['google_calendar_id', 'google_event_id'])
+            ->mapWithKeys(fn (GoogleEventImport $import) => [$import->google_calendar_id.'|'.$import->google_event_id => true])
+            ->all();
+    }
+
+    /** Google descriptions can contain HTML; show them as short plain text. */
+    private function plainText(?string $html): ?string
+    {
+        if ($html === null || trim($html) === '') {
+            return null;
+        }
+
+        $text = preg_replace(['/<br\s*\/?>/i', '/<\/(p|div|li)>/i'], "\n", $html);
+
+        return Str::limit(trim(preg_replace("/\n{3,}/", "\n\n", html_entity_decode(strip_tags((string) $text)))), 600);
     }
 }
