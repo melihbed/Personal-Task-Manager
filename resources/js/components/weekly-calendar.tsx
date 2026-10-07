@@ -23,7 +23,14 @@ type Props = {
     /** A session or one routine occurrence was dragged to a new day or time; minutes is the new start. */
     onMoveSession: (session: PlannerSession, date: string, minutes: number) => void;
     onMoveRoutine: (occurrence: RoutineOccurrence, date: string, minutes: number) => void;
+    /** A Google event was dragged to a new day (minutes is the new start, or null for an all-day event). */
+    onMoveGoogle: (event: GoogleEvent, date: string, minutes: number | null) => void;
+    /** A deadline was dragged to a new day (minutes is the new time, or null for a date-only deadline). */
+    onMoveDeadline: (task: PlannerTask, date: string, minutes: number | null) => void;
 };
+
+/** A deadline or an all-day Google event being dragged. A timed deadline goes on the time grid; the rest go on the "Due" row. */
+type DueDrag = { task?: PlannerTask; event?: GoogleEvent; timed: boolean };
 
 /** Anything drawn as a block in the time grid: a work session or one day of a routine. */
 type Block = {
@@ -60,6 +67,8 @@ export default function WeeklyCalendar({
     onDropTask,
     onMoveSession,
     onMoveRoutine,
+    onMoveGoogle,
+    onMoveDeadline,
 }: Props) {
     const [now, setNow] = useState(() => new Date());
     const today = zonedParts(now, timezone).date;
@@ -70,6 +79,8 @@ export default function WeeklyCalendar({
     const viewport = useRef<HTMLDivElement>(null);
     const [hover, setHover] = useState<{ date: string; minutes: number } | null>(null);
     const [draggingBlock, setDraggingBlock] = useState<{ block: Block; grabMinutes: number } | null>(null);
+    const [draggingDue, setDraggingDue] = useState<DueDrag | null>(null);
+    const [dueHover, setDueHover] = useState<string | null>(null);
 
     const blocks: Block[] = [
         ...sessions.map((session): Block => ({
@@ -156,18 +167,44 @@ export default function WeeklyCalendar({
 
         const minutes = snapMinutes(event, draggingBlock?.grabMinutes);
         const moved = draggingBlock?.block;
+        const due = draggingDue;
 
         setHover(null);
         setDraggingBlock(null);
+        setDraggingDue(null);
 
-        if (moved?.session) onMoveSession(moved.session, date, minutes);
+        if (due?.timed && due.task) onMoveDeadline(due.task, date, minutes);
+        else if (moved?.google) onMoveGoogle(moved.google, date, minutes);
+        else if (moved?.session) onMoveSession(moved.session, date, minutes);
         else if (moved?.routine) onMoveRoutine(moved.routine, date, minutes);
         else if (draggingTask) onDropTask(date, minutes);
     }
 
     useEffect(() => {
-        if (!draggingTask && !draggingBlock) setHover(null);
-    }, [draggingTask, draggingBlock]);
+        if (!draggingTask && !draggingBlock && !draggingDue) setHover(null);
+        if (!draggingDue) setDueHover(null);
+    }, [draggingTask, draggingBlock, draggingDue]);
+
+    /** Starts dragging a deadline or an all-day event from the "Due" row or the time grid. */
+    function startDueDrag(event: DragEvent<HTMLElement>, drag: DueDrag, label: string) {
+        event.dataTransfer.setData('text/plain', label);
+        event.dataTransfer.effectAllowed = 'move';
+        setDraggingDue(drag);
+    }
+
+    /** The "Due" row accepts what belongs on it: date-only deadlines and all-day events, dropped on a day. */
+    function dropOnDueRow(event: DragEvent<HTMLElement>, date: string) {
+        event.preventDefault();
+
+        const due = draggingDue;
+
+        setDraggingDue(null);
+        setDueHover(null);
+
+        if (!due || due.timed) return;
+        if (due.task) onMoveDeadline(due.task, date, null);
+        else if (due.event) onMoveGoogle(due.event, date, null);
+    }
 
     // Keep the "now" line current, and catch up when the tab is shown again after being in the background.
     useEffect(() => {
@@ -189,8 +226,8 @@ export default function WeeklyCalendar({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [weekStart, today]);
 
-    const previewMinutes = draggingBlock ? lengthInMinutes(draggingBlock.block) : (draggingTask?.estimate_minutes ?? 30);
-    const previewTitle = draggingBlock ? draggingBlock.block.title : draggingTask?.title;
+    const previewMinutes = draggingBlock ? lengthInMinutes(draggingBlock.block) : draggingDue?.timed ? 15 : (draggingTask?.estimate_minutes ?? 30);
+    const previewTitle = draggingBlock ? draggingBlock.block.title : draggingDue?.timed ? draggingDue.task?.title : draggingTask?.title;
 
     return (
         <div className="overflow-hidden rounded-2xl border border-[var(--pm-border)] bg-white">
@@ -220,15 +257,32 @@ export default function WeeklyCalendar({
                         const allDay = googleAllDay(date);
 
                         return (
-                            <div key={date} className={`min-w-0 flex-1 space-y-1 border-l border-[var(--pm-border)] p-1 ${selected === date ? 'block' : 'hidden md:block'}`}>
+                            <div
+                                key={date}
+                                className={`min-w-0 flex-1 space-y-1 border-l border-[var(--pm-border)] p-1 transition-colors duration-150 ${selected === date ? 'block' : 'hidden md:block'} ${draggingDue && !draggingDue.timed ? (dueHover === date ? 'bg-orange-100/70' : 'bg-orange-50/40') : ''}`}
+                                onDragOver={event => {
+                                    if (!draggingDue || draggingDue.timed) return;
+
+                                    event.preventDefault();
+                                    event.dataTransfer.dropEffect = 'move';
+                                    setDueHover(date);
+                                }}
+                                onDragLeave={event => {
+                                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDueHover(null);
+                                }}
+                                onDrop={event => dropOnDueRow(event, date)}
+                            >
                                 {items.slice(0, 2).map(task => (
                                     <button
                                         key={task.id}
                                         type="button"
                                         onClick={() => onSelectDeadline(task)}
-                                        title={`Due ${formatDue(task.due_at ?? '', false, timezone)} · ${task.title}`}
+                                        draggable={!task.canvas_assignment}
+                                        onDragStart={event => startDueDrag(event, { task, timed: false }, task.title)}
+                                        onDragEnd={() => setDraggingDue(null)}
+                                        title={`Due ${formatDue(task.due_at ?? '', false, timezone)} · ${task.title}${task.canvas_assignment ? ' · Set by Canvas' : ' · Drag to another day'}`}
                                         aria-label={`Deadline: ${task.title}, ${formatDue(task.due_at ?? '', false, timezone)}${dueState(task, timezone) === 'overdue' ? ', overdue' : ''}`}
-                                        className={`pm-due pm-due--${dueState(task, timezone)} w-full`}
+                                        className={`pm-due pm-due--${dueState(task, timezone)} w-full ${task.canvas_assignment ? '' : 'cursor-grab'}`}
                                     >
                                         <span className="pm-due__text">{task.title}</span>
                                     </button>
@@ -241,9 +295,12 @@ export default function WeeklyCalendar({
                                         key={event.id}
                                         type="button"
                                         onClick={() => onSelectGoogle(event)}
-                                        title={`${event.title} · ${event.calendar} (Google Calendar)`}
+                                        draggable
+                                        onDragStart={drag => startDueDrag(drag, { event, timed: false }, event.title)}
+                                        onDragEnd={() => setDraggingDue(null)}
+                                        title={`${event.title} · ${event.calendar} (Google Calendar) · Drag to another day`}
                                         aria-label={`All day: ${event.title}, from Google Calendar`}
-                                        className="pm-due w-full"
+                                        className="pm-due w-full cursor-grab"
                                         style={{ borderLeft: `3px solid ${event.color ?? 'var(--pm-muted)'}` }}
                                     >
                                         <span className="pm-due__text"><span className="mr-1 font-semibold">G</span>{event.title}</span>
@@ -279,7 +336,7 @@ export default function WeeklyCalendar({
                             key={date}
                             className={`relative min-w-0 flex-1 border-l border-[var(--pm-border)] ${selected === date ? 'block' : 'hidden md:block'} ${date === today ? 'bg-orange-50/30' : ''} ${(draggingTask || draggingBlock) && hover?.date === date ? 'bg-[var(--pm-accent)]/5' : ''} transition-colors duration-150`}
                             onDragOver={event => {
-                                if (!draggingTask && !draggingBlock) return;
+                                if (!draggingTask && !draggingBlock && !draggingDue?.timed) return;
 
                                 event.preventDefault();
                                 event.dataTransfer.dropEffect = 'move';
@@ -310,7 +367,7 @@ export default function WeeklyCalendar({
                                         key={block.key}
                                         role="button"
                                         tabIndex={0}
-                                        draggable={!block.google}
+                                        draggable
                                         onClick={() => select(block)}
                                         onKeyDown={event => {
                                             if (event.key === 'Enter' || event.key === ' ') {
@@ -329,9 +386,9 @@ export default function WeeklyCalendar({
                                             setDraggingBlock(null);
                                             setHover(null);
                                         }}
-                                        title={`${block.title} · ${range.replace(' to ', '–')}${block.routine ? ' · Repeats' : ''}${block.google ? ' · Google Calendar' : ''}${overlapping ? ' · Overlap' : ''}`}
+                                        title={`${block.title} · ${range.replace(' to ', '–')}${block.routine ? ' · Repeats' : ''}${block.google ? ' · Google Calendar · Drag to move' : ''}${overlapping ? ' · Overlap' : ''}`}
                                         aria-label={`${block.title}, ${range}${block.routine ? ', repeats' : ''}${block.google ? ', from Google Calendar' : ''}${overlapping ? ', overlaps another event' : ''}`}
-                                        className={`pm-calendar-session absolute ${block.google ? 'cursor-pointer' : 'cursor-grab'} overflow-hidden rounded-lg border px-1.5 py-1 text-left text-[10px] leading-tight ${draggingBlock?.block.key === block.key ? 'opacity-40' : ''} ${popping.has(signature(block)) ? 'pm-pop' : ''} ${palette} ${overlapping ? '!border-amber-600' : ''}`}
+                                        className={`pm-calendar-session absolute cursor-grab overflow-hidden rounded-lg border px-1.5 py-1 text-left text-[10px] leading-tight ${draggingBlock?.block.key === block.key ? 'opacity-40' : ''} ${popping.has(signature(block)) ? 'pm-pop' : ''} ${palette} ${overlapping ? '!border-amber-600' : ''}`}
                                         style={{
                                             top: start / 60 * HOUR_HEIGHT,
                                             height: Math.max(18, (end - start) / 60 * HOUR_HEIGHT - 2),
@@ -354,7 +411,10 @@ export default function WeeklyCalendar({
                                     key={`due-${task.id}`}
                                     type="button"
                                     onClick={() => onSelectDeadline(task)}
-                                    title={`Due ${formatDue(task.due_at ?? '', true, timezone)} · ${task.title}`}
+                                    draggable={!task.canvas_assignment}
+                                    onDragStart={event => startDueDrag(event, { task, timed: true }, task.title)}
+                                    onDragEnd={() => { setDraggingDue(null); setHover(null); }}
+                                    title={`Due ${formatDue(task.due_at ?? '', true, timezone)} · ${task.title}${task.canvas_assignment ? ' · Set by Canvas' : ' · Drag to move the deadline'}`}
                                     aria-label={`Deadline: ${task.title}, ${formatDue(task.due_at ?? '', true, timezone)}${dueState(task, timezone) === 'overdue' ? ', overdue' : ''}`}
                                     className={`pm-deadline pm-deadline--${dueState(task, timezone)}`}
                                     style={{ top: dueMinutes(task, timezone) / 60 * HOUR_HEIGHT }}
@@ -365,7 +425,7 @@ export default function WeeklyCalendar({
 
                             {date === today && <div className="pm-now" aria-hidden="true" style={{ top: nowMinutes / 60 * HOUR_HEIGHT }} />}
 
-                            {(draggingTask || draggingBlock) && hover?.date === date && (
+                            {(draggingTask || draggingBlock || draggingDue?.timed) && hover?.date === date && (
                                 <div className="pm-drop-preview" style={{ top: hover.minutes / 60 * HOUR_HEIGHT, height: Math.max(18, previewMinutes / 60 * HOUR_HEIGHT - 2) }}>
                                     {previewTitle} · {clock(hover.minutes)}
                                 </div>
