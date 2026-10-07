@@ -28,6 +28,8 @@ type Props = {
     redirectUri: string;
     account: Account | null;
     pushedEvents: number;
+    /** Google events hidden from the planner calendar. */
+    hiddenEvents: { id: number; label: string }[];
     /** Loaded after the page appears, because it asks Google. */
     calendars?: Calendar[];
 };
@@ -165,7 +167,7 @@ function Connect() {
     );
 }
 
-function Connected({ account, calendars, pushedEvents }: { account: Account; calendars?: Calendar[]; pushedEvents: number }) {
+function Connected({ account, calendars, pushedEvents, hiddenEvents }: { account: Account; calendars?: Calendar[]; pushedEvents: number; hiddenEvents: { id: number; label: string }[] }) {
     const [confirming, setConfirming] = useState<'remove' | 'disconnect' | null>(null);
     const [busy, setBusy] = useState(false);
     const [syncing, setSyncing] = useState(false);
@@ -301,6 +303,20 @@ function Connected({ account, calendars, pushedEvents }: { account: Account; cal
                 </Section>
             )}
 
+            {hiddenEvents.length > 0 && (
+                <Section title="Hidden events">
+                    <p className="text-sm text-[var(--pm-muted)]">These Google events are hidden from your planner calendar. They are still in Google Calendar.</p>
+                    <ul className="mt-3 divide-y divide-[var(--pm-border)]">
+                        {hiddenEvents.map(hidden => (
+                            <li key={hidden.id} className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
+                                <span className="min-w-0 truncate text-sm">{hidden.label}</span>
+                                <Button type="button" variant="secondary" size="small" className="shrink-0" onClick={() => router.delete(`/integrations/google/hidden/${hidden.id}`, { preserveScroll: true })}>Show again</Button>
+                            </li>
+                        ))}
+                    </ul>
+                </Section>
+            )}
+
             {confirming === 'remove' && (
                 <ConfirmDialog
                     title="Remove planner events from Google?"
@@ -325,7 +341,7 @@ function Connected({ account, calendars, pushedEvents }: { account: Account; cal
     );
 }
 
-export default function GoogleCalendar({ configured, state, branding, troubleshoot, redirectUri, account, pushedEvents, calendars }: Props) {
+export default function GoogleCalendar({ configured, state, branding, troubleshoot, redirectUri, account, pushedEvents, hiddenEvents, calendars }: Props) {
     const { status } = usePage<{ status: string | null }>().props;
 
     return (
@@ -335,7 +351,7 @@ export default function GoogleCalendar({ configured, state, branding, troublesho
                 <StatusSummary configured={configured} state={state} account={account} icon={branding.icon} />
                 {!configured && <Setup redirectUri={redirectUri} />}
                 {configured && account === null && <Connect />}
-                {account !== null && <Connected account={account} calendars={calendars} pushedEvents={pushedEvents} />}
+                {account !== null && <Connected account={account} calendars={calendars} pushedEvents={pushedEvents} hiddenEvents={hiddenEvents} />}
                 <Troubleshooting redirectUri={redirectUri} open={troubleshoot} />
                 <p className="px-1 text-xs text-[var(--pm-muted)]">{branding.legal} Not affiliated with or endorsed by Google.</p>
             </div>

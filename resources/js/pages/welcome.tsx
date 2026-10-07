@@ -1,6 +1,7 @@
 import { Link, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import AppLayout from '../../../resources/js/layouts/app-layout';
+import GoogleEventDialog from '../components/google-event-dialog';
 import ResponsibilityDialog from '../components/responsibility-dialog';
 import RoutineDialog from '../components/routine-dialog';
 import RoutineMoveDialog from '../components/routine-move-dialog';
@@ -85,6 +86,7 @@ export default function Welcome({
     const [draggingTask, setDraggingTask] = useState<PlannerTask | null>(null);
     const [routineDialog, setRoutineDialog] = useState<{ id: number | null } | null>(null);
     const [selectedOccurrence, setSelectedOccurrence] = useState<RoutineOccurrence | null>(null);
+    const [selectedGoogleEvent, setSelectedGoogleEvent] = useState<GoogleEvent | null>(null);
     const [routineMove, setRoutineMove] = useState<{ occurrence: RoutineOccurrence; startsAt: string; endsAt: string } | null>(null);
     const editingRoutine = routineDialog?.id != null ? routines.find(routine => routine.id === routineDialog.id) : undefined;
     const [planDraft, setPlanDraft] = useState<{ task: PlannerTask; session?: PlannerSession; initial: { date: string; startTime: string; endDate: string; endTime: string } } | null>(null);
@@ -208,7 +210,7 @@ export default function Welcome({
                 onEditRoutine={routine => setRoutineDialog({ id: routine.id })}
                 onSelectOccurrence={setSelectedOccurrence}
             />
-            <section className="min-w-0" aria-labelledby="week-title">{google?.needsReconnect && <p role="alert" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">Google Calendar needs to be connected again, so syncing is paused. <Link href="/integrations/google" className="pm-link">Fix it</Link></p>}<div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 id="week-title" className="text-lg font-medium">{dateLabel(weekStart, { month: 'short', day: 'numeric' })} – {dateLabel(weekEnd, { month: 'short', day: 'numeric', year: 'numeric' })}</h2><p className="mt-1 text-xs text-[var(--pm-muted)]">Monday–Sunday · Click a session to manage it</p></div><div className="pm-button-group"><button type="button" aria-label="Previous week" onClick={() => navigate(addDays(weekStart, -7))} className="pm-button pm-button--secondary pm-button--icon">‹</button><button type="button" onClick={() => navigate(null)} className="pm-button pm-button--secondary">Today</button><button type="button" aria-label="Next week" onClick={() => navigate(addDays(weekStart, 7))} className="pm-button pm-button--secondary pm-button--icon">›</button></div></div><WeeklyCalendar weekStart={weekStart} timezone={timezone} sessions={sessions} onSelect={setSelectedSession} deadlines={deadlines} onSelectDeadline={setSelectedTask} routineOccurrences={routineSessions} onSelectRoutine={setSelectedOccurrence} googleEvents={googleEvents ?? []} googleLoading={!!google?.connected && googleEvents === undefined} draggingTask={draggingTask} onDropTask={planByDrop} onMoveSession={moveSession} onMoveRoutine={moveRoutine} />{sessions.length === 0 && <p className="mt-3 text-sm text-[var(--pm-muted)]">Your week is open. Drag a task here, or choose Plan beside it, to reserve time.</p>}</section>
+            <section className="min-w-0" aria-labelledby="week-title">{google?.needsReconnect && <p role="alert" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">Google Calendar needs to be connected again, so syncing is paused. <Link href="/integrations/google" className="pm-link">Fix it</Link></p>}<div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 id="week-title" className="text-lg font-medium">{dateLabel(weekStart, { month: 'short', day: 'numeric' })} – {dateLabel(weekEnd, { month: 'short', day: 'numeric', year: 'numeric' })}</h2><p className="mt-1 text-xs text-[var(--pm-muted)]">Monday–Sunday · Click a session to manage it</p></div><div className="pm-button-group"><button type="button" aria-label="Previous week" onClick={() => navigate(addDays(weekStart, -7))} className="pm-button pm-button--secondary pm-button--icon">‹</button><button type="button" onClick={() => navigate(null)} className="pm-button pm-button--secondary">Today</button><button type="button" aria-label="Next week" onClick={() => navigate(addDays(weekStart, 7))} className="pm-button pm-button--secondary pm-button--icon">›</button></div></div><WeeklyCalendar weekStart={weekStart} timezone={timezone} sessions={sessions} onSelect={setSelectedSession} deadlines={deadlines} onSelectDeadline={setSelectedTask} routineOccurrences={routineSessions} onSelectRoutine={setSelectedOccurrence} googleEvents={googleEvents ?? []} onSelectGoogle={setSelectedGoogleEvent} googleLoading={!!google?.connected && googleEvents === undefined} draggingTask={draggingTask} onDropTask={planByDrop} onMoveSession={moveSession} onMoveRoutine={moveRoutine} />{sessions.length === 0 && <p className="mt-3 text-sm text-[var(--pm-muted)]">Your week is open. Drag a task here, or choose Plan beside it, to reserve time.</p>}</section>
         </div>
         {routineDialog && (routineDialog.id === null || editingRoutine) && (
             <RoutineDialog
@@ -217,6 +219,15 @@ export default function Welcome({
                 responsibilities={responsibilities}
                 timezone={timezone}
                 onClose={() => setRoutineDialog(null)}
+            />
+        )}
+        {selectedGoogleEvent && (
+            <GoogleEventDialog
+                key={selectedGoogleEvent.id}
+                event={selectedGoogleEvent}
+                responsibilities={responsibilities}
+                timezone={timezone}
+                onClose={() => setSelectedGoogleEvent(null)}
             />
         )}
         {routineMove && routines.some(routine => routine.id === routineMove.occurrence.routine_id) && (

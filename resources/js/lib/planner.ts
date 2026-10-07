@@ -1,5 +1,5 @@
 export type PlannerTask = {
-    id: number; responsibility_id: number | null; title: string; priority: string;
+    id: number; responsibility_id: number | null; title: string; notes: string | null; priority: string;
     estimate_minutes: number | null; due_at: string | null; due_has_time: boolean; completed_at: string | null; calendar_sessions_count: number;
 };
 export type PlannerSession = {
@@ -9,9 +9,10 @@ export type PlannerSession = {
 
 /** An event from the user's Google Calendar, shown read-only. An all-day event's end_date is exclusive. */
 export type GoogleEvent = {
-    id: string; title: string; calendar: string; color: string | null; all_day: boolean;
+    id: string; calendar_id: string; event_id: string; recurring_event_id: string | null;
+    title: string; calendar: string; color: string | null; all_day: boolean;
     starts_at: string | null; ends_at: string | null; start_date: string | null; end_date: string | null;
-    html_link: string | null;
+    html_link: string | null; location: string | null; description: string | null; guests: number;
 };
 
 /** A recurring calendar block. days are ISO weekdays: 1 = Monday ... 7 = Sunday. */

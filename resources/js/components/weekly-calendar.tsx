@@ -10,8 +10,9 @@ type Props = {
     /** Occurrences of recurring routines for this week. */
     routineOccurrences: RoutineOccurrence[];
     onSelectRoutine: (occurrence: RoutineOccurrence) => void;
-    /** Events from the user's Google Calendar: read-only, and never dragged. */
+    /** Events from the user's Google Calendar: never dragged. Clicking one opens its details. */
     googleEvents: GoogleEvent[];
+    onSelectGoogle: (event: GoogleEvent) => void;
     googleLoading: boolean;
     /** Unfinished tasks that have a deadline. */
     deadlines: PlannerTask[];
@@ -51,6 +52,7 @@ export default function WeeklyCalendar({
     routineOccurrences,
     onSelectRoutine,
     googleEvents,
+    onSelectGoogle,
     googleLoading,
     deadlines,
     onSelectDeadline,
@@ -141,9 +143,8 @@ export default function WeeklyCalendar({
     };
 
     function select(block: Block) {
-        if (block.google) {
-            if (block.google.html_link) window.open(block.google.html_link, '_blank', 'noopener,noreferrer');
-        } else if (block.session) onSelect(block.session);
+        if (block.google) onSelectGoogle(block.google);
+        else if (block.session) onSelect(block.session);
         else if (block.routine) onSelectRoutine(block.routine);
     }
 
@@ -221,7 +222,7 @@ export default function WeeklyCalendar({
                                     <button
                                         key={event.id}
                                         type="button"
-                                        onClick={() => { if (event.html_link) window.open(event.html_link, '_blank', 'noopener,noreferrer'); }}
+                                        onClick={() => onSelectGoogle(event)}
                                         title={`${event.title} · ${event.calendar} (Google Calendar)`}
                                         aria-label={`All day: ${event.title}, from Google Calendar`}
                                         className="pm-due w-full"
