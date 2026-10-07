@@ -3,6 +3,7 @@
 namespace App\Services\GoogleCalendar;
 
 use App\Models\CalendarSession;
+use App\Models\CanvasAssignment;
 use App\Models\GoogleAccount;
 use App\Models\GoogleEventImport;
 use App\Models\GoogleEventLink;
@@ -79,7 +80,7 @@ class GoogleSync
 
     private function deadline(User $user, GoogleAccount $account, GoogleCalendarClient $client, int $id): void
     {
-        if (GoogleEventImport::isImported($user->id, 'task', $id)) {
+        if (GoogleEventImport::isImported($user->id, 'task', $id) || CanvasAssignment::hasTask($user->id, $id)) {
             return;
         }
 

@@ -164,7 +164,7 @@ describe('the integrations page', function () {
         $this->actingAs($user)->get('/integrations')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('settings/integrations')
-                ->has('integrations', 1)
+                ->has('integrations', 2)
                 ->where('integrations.0.key', 'google-calendar')
                 ->where('integrations.0.name', 'Google Calendar')
                 ->where('integrations.0.href', route('google.show'))

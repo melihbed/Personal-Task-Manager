@@ -73,4 +73,19 @@ class User extends Authenticatable
     {
         return $this->hasMany(GoogleEventImport::class);
     }
+
+    public function canvasAccount(): HasOne
+    {
+        return $this->hasOne(CanvasAccount::class);
+    }
+
+    public function canvasCourses(): HasMany
+    {
+        return $this->hasMany(CanvasCourse::class);
+    }
+
+    public function canvasAssignments(): HasMany
+    {
+        return $this->hasMany(CanvasAssignment::class);
+    }
 }

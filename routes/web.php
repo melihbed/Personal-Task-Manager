@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\CalendarSessionController;
+use App\Http\Controllers\CanvasController;
+use App\Http\Controllers\CanvasSyncController;
 use App\Http\Controllers\CompletedTaskController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GoogleCalendarController;
@@ -60,6 +62,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/integrations/google/imports', [GoogleImportController::class, 'store'])->name('google.imports.store');
     Route::post('/integrations/google/sync', [GoogleSyncController::class, 'store'])->name('google.sync.store');
     Route::delete('/integrations/google/sync', [GoogleSyncController::class, 'destroy'])->name('google.sync.destroy');
+
+    Route::get('/integrations/canvas', [CanvasController::class, 'show'])->name('canvas.show');
+    Route::post('/integrations/canvas', [CanvasController::class, 'store'])->name('canvas.store');
+    Route::patch('/integrations/canvas', [CanvasController::class, 'update'])->name('canvas.update');
+    Route::delete('/integrations/canvas', [CanvasController::class, 'destroy'])->name('canvas.destroy');
+    Route::post('/integrations/canvas/sync', [CanvasSyncController::class, 'store'])->name('canvas.sync.store');
 
     Route::post('/routines', [RoutineController::class, 'store'])->name('routines.store');
     Route::patch('/routines/{routine}', [RoutineController::class, 'update'])->name('routines.update');

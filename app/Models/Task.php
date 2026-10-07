@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[ObservedBy([TaskObserver::class])]
 class Task extends Model
@@ -31,5 +32,11 @@ class Task extends Model
     public function calendarSessions(): HasMany
     {
         return $this->hasMany(CalendarSession::class);
+    }
+
+    /** The Canvas assignment this task was made from, if any. */
+    public function canvasAssignment(): HasOne
+    {
+        return $this->hasOne(CanvasAssignment::class);
     }
 }
