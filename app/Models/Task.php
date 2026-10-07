@@ -39,4 +39,9 @@ class Task extends Model
     {
         return $this->hasOne(CanvasAssignment::class);
     }
+
+    public function pomodoroSessions(): HasMany
+    {
+        return $this->hasMany(PomodoroSession::class);
+    }
 }

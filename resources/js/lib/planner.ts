@@ -3,6 +3,8 @@ export type PlannerTask = {
     estimate_minutes: number | null; due_at: string | null; due_has_time: boolean; completed_at: string | null; calendar_sessions_count: number;
     /** When its next work session that has not ended yet starts. */
     next_session_at?: string | null;
+    /** Finished Pomodoro focus rounds spent on this task. */
+    focus_rounds_count?: number;
     /** Set when the task was made from a Canvas assignment. */
     canvas_assignment?: { html_url: string | null; course: { name: string } } | null;
 };

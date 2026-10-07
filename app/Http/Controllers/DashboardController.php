@@ -36,7 +36,7 @@ class DashboardController extends Controller
                 });
             })
             ->with('canvasAssignment:id,task_id,html_url,canvas_course_id', 'canvasAssignment.course:id,name')
-            ->withCount('calendarSessions')
+            ->withCount(['calendarSessions', 'pomodoroSessions as focus_rounds_count' => fn ($query) => $query->where('kind', 'focus')->where('status', 'completed')])
             // The start of the task's next session that has not ended yet; a planned task is being dealt with.
             ->withMin(['calendarSessions as next_session_at' => fn ($query) => $query->where('ends_at', '>', now())], 'starts_at')
             ->orderByDesc('created_at')->orderByDesc('id')

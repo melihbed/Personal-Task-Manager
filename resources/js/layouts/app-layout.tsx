@@ -1,6 +1,9 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState, type ReactNode } from 'react';
 import AssistantPanel from '../components/assistant/assistant-panel';
+import CompanionDock from '../components/companion/companion-dock';
+import { CompanionProvider } from '../components/companion/companion-context';
+import { PomodoroProvider } from '../components/pomodoro/pomodoro-context';
 import { ToastProvider } from '../components/ui/toast';
 
 type Props = { title: string; children: ReactNode; backHref?: string };
@@ -12,6 +15,7 @@ export default function AppLayout({ title, children, backHref }: Props) {
     const onHome = url.split('?')[0] === '/';
     const onIntegrations = url.startsWith('/integrations');
     const onSchool = url.startsWith('/school');
+    const onFocus = url.startsWith('/focus');
 
     useEffect(() => {
         if (!sidebarOpen) return;
@@ -26,6 +30,8 @@ export default function AppLayout({ title, children, backHref }: Props) {
 
     return (
         <ToastProvider>
+        <CompanionProvider>
+        <PomodoroProvider>
         <div className="min-h-dvh bg-[var(--pm-background)] text-[var(--pm-text)]">
             <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:p-3">Skip to content</a>
             <div className="flex min-h-dvh">
@@ -52,6 +58,11 @@ export default function AppLayout({ title, children, backHref }: Props) {
                             if (window.innerWidth < 768) setSidebarOpen(false);
                         }} className={`mt-1 flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${onSchool ? 'bg-white shadow-sm' : 'hover:bg-white/60'}`}>
                             <span aria-hidden="true" className="h-2 w-2 rounded-full bg-[var(--pm-blue)]" />School
+                        </Link>
+                        <Link href="/focus" aria-current={onFocus ? 'page' : undefined} onClick={() => {
+                            if (window.innerWidth < 768) setSidebarOpen(false);
+                        }} className={`mt-1 flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${onFocus ? 'bg-white shadow-sm' : 'hover:bg-white/60'}`}>
+                            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-[var(--pm-accent)]" />Focus
                         </Link>
                         <p className="mt-8 mb-3 px-4 text-xs font-medium tracking-wider text-[var(--pm-muted)] uppercase">Settings</p>
                         <Link href="/integrations" aria-current={onIntegrations ? 'page' : undefined} onClick={() => {
@@ -104,22 +115,15 @@ export default function AppLayout({ title, children, backHref }: Props) {
                             )}
                             <h1 className="text-xl font-medium break-words">{title}</h1>
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => setAssistantOpen(open => !open)}
-                            aria-expanded={assistantOpen}
-                            aria-controls="assistant-panel"
-                            className="pm-button pm-button--secondary ml-auto"
-                        >
-                            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3 2.2 5.3 5.3 2.2-5.3 2.2L12 18l-2.2-5.3-5.3-2.2 5.3-2.2zM18.5 17v4M16.5 19h4" /></svg>
-                            Assistant
-                        </button>
+                        <CompanionDock open={assistantOpen} onOpenAssistant={() => setAssistantOpen(open => !open)} />
                     </header>
                     <main id="main-content" className="px-6 pb-10 lg:px-10"><div className="mx-auto max-w-[1600px]">{children}</div></main>
                 </div>
             </div>
         </div>
         <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
+        </PomodoroProvider>
+        </CompanionProvider>
         </ToastProvider>
     );
 }

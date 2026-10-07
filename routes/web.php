@@ -13,6 +13,7 @@ use App\Http\Controllers\GoogleImportController;
 use App\Http\Controllers\GoogleOAuthController;
 use App\Http\Controllers\GoogleSyncController;
 use App\Http\Controllers\IntegrationsController;
+use App\Http\Controllers\PomodoroController;
 use App\Http\Controllers\RoutineController;
 use App\Http\Controllers\RoutineOccurrenceController;
 use App\Http\Controllers\SchoolController;
@@ -76,6 +77,16 @@ Route::middleware('auth')->group(function () {
     Route::delete('/assistant', [AssistantController::class, 'destroy'])->name('assistant.destroy');
     Route::post('/assistant/messages/{message}/proposals/{index}/approve', [AssistantController::class, 'approve'])->whereNumber('index')->name('assistant.approve');
     Route::post('/assistant/messages/{message}/proposals/{index}/dismiss', [AssistantController::class, 'dismiss'])->whereNumber('index')->name('assistant.dismiss');
+
+    Route::get('/focus', [PomodoroController::class, 'show'])->name('focus.show');
+    Route::get('/pomodoro', [PomodoroController::class, 'state'])->name('pomodoro.state');
+    Route::get('/pomodoro/stats', [PomodoroController::class, 'stats'])->name('pomodoro.stats');
+    Route::post('/pomodoro', [PomodoroController::class, 'store'])->name('pomodoro.store');
+    Route::patch('/pomodoro/settings', [PomodoroController::class, 'updateSettings'])->name('pomodoro.settings');
+    Route::post('/pomodoro/{session}/pause', [PomodoroController::class, 'pause'])->name('pomodoro.pause');
+    Route::post('/pomodoro/{session}/resume', [PomodoroController::class, 'resume'])->name('pomodoro.resume');
+    Route::post('/pomodoro/{session}/complete', [PomodoroController::class, 'complete'])->name('pomodoro.complete');
+    Route::post('/pomodoro/{session}/abandon', [PomodoroController::class, 'abandon'])->name('pomodoro.abandon');
 
     Route::get('/school', [SchoolController::class, 'index'])->name('school.index');
 

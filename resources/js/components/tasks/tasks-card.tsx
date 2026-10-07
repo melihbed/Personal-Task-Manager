@@ -6,6 +6,7 @@ import { buildSections, completedTasks, filterTasks, taskViews, type Responsibil
 import { useStoredState } from '../../lib/use-stored-state';
 import { useUndoableDelete } from '../../lib/use-undoable-delete';
 import AddTaskForm from '../add-task-form';
+import { useCompanion } from '../companion/companion-context';
 import EditTaskDialog from '../edit-task-dialog';
 import ConfirmDialog from '../ui/confirm-dialog';
 import Menu from '../ui/menu';
@@ -57,6 +58,7 @@ export default function TasksCard({
     onSelectOccurrence,
 }: Props) {
     const toast = useToast();
+    const { celebrate } = useCompanion();
     const [tab, setTab] = useStoredState<Tab>('pm.card.tab', 'tasks', isTab);
     const [view, setView] = useStoredState<TaskView>('pm.tasks.view', 'planning', isView);
     const [storedFilter, setFilter] = useStoredState<ResponsibilityFilter>('pm.tasks.filter', 'all', isFilter);
@@ -98,6 +100,7 @@ export default function TasksCard({
         setCompleting(current => new Set(current).add(task.id));
         router.patch(`/tasks/${task.id}/completion`, { completed: !task.completed_at }, {
             preserveScroll: true,
+            onSuccess: () => { if (!task.completed_at) celebrate(); },
             onError: () => toast.show({ message: 'Could not update that task. Please try again.' }),
             onFinish: () => setCompleting(current => {
                 const next = new Set(current);
@@ -106,7 +109,7 @@ export default function TasksCard({
                 return next;
             }),
         });
-    }, [toast]);
+    }, [toast, celebrate]);
 
     function requestDelete(task: PlannerTask) {
         if (task.calendar_sessions_count > 0) setConfirmDelete(task);

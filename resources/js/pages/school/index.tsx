@@ -1,5 +1,6 @@
 import { Link, router } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
+import { useCompanion } from '../../components/companion/companion-context';
 import SchoolAssignmentDialog from '../../components/school/school-assignment-dialog';
 import SchoolRow from '../../components/school/school-row';
 import Button from '../../components/ui/button';
@@ -45,6 +46,7 @@ function Empty({ state }: { state: Props['state'] }) {
 }
 
 export default function School({ state, lastSyncedAt, courses, assignments }: Props) {
+    const { celebrate } = useCompanion();
     const [tab, setTab] = useStoredState<Tab>('pm.school.tab', 'todo', isTab);
     const [collapsedKeys, setCollapsedKeys] = useStoredState<string>('pm.school.collapsed', 'later,undated', isString);
     const [courseId, setCourseId] = useState<number | null>(null);
@@ -76,6 +78,7 @@ export default function School({ state, lastSyncedAt, courses, assignments }: Pr
 
         router.patch(`/tasks/${item.task_id}/completion`, { completed: completing }, {
             preserveScroll: true,
+            onSuccess: () => { if (completing) celebrate(); },
             onFinish: () => setLeaving(current => { const next = new Set(current); next.delete(item.id); return next; }),
         });
     }

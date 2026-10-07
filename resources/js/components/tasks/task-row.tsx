@@ -3,6 +3,7 @@ import { formatLength } from '../../lib/routines';
 import { courseTitle } from '../../lib/school';
 import type { PlannerTask } from '../../lib/planner';
 import DuePill from '../due-pill';
+import { router } from '@inertiajs/react';
 import Button from '../ui/button';
 import Menu from '../ui/menu';
 
@@ -93,6 +94,7 @@ export default function TaskRow({ task, timezone, responsibility, leaving, fresh
                             {task.due_at && <DuePill task={task} timezone={timezone} />}
                             {task.estimate_minutes && <span>{formatLength(task.estimate_minutes)}</span>}
                             {task.notes && <span title={task.notes}>≡ Notes</span>}
+                            {(task.focus_rounds_count ?? 0) > 0 && <span title="Finished focus rounds on this task">◔ {task.focus_rounds_count} {task.focus_rounds_count === 1 ? 'focus round' : 'focus rounds'}</span>}
                             {task.calendar_sessions_count > 0 && <span>▦ {task.calendar_sessions_count} {task.calendar_sessions_count === 1 ? 'session' : 'sessions'}</span>}
                             {task.canvas_assignment && (
                                 <span title="From Canvas">{courseTitle(task.canvas_assignment.course.name)}</span>
@@ -111,7 +113,7 @@ export default function TaskRow({ task, timezone, responsibility, leaving, fresh
                         label={`Actions for ${task.title}`}
                         items={[
                             { label: 'Edit task…', onSelect: () => onEdit(task) },
-                            ...(done ? [] : [{ label: 'Plan on calendar…', onSelect: () => onPlan(task) }]),
+                            ...(done ? [] : [{ label: 'Plan on calendar…', onSelect: () => onPlan(task) }, { label: 'Start focus…', onSelect: () => router.visit(`/focus?task=${task.id}`) }]),
                             { label: done ? 'Reopen' : 'Mark done', onSelect: () => onToggle(task) },
                             { label: 'Delete task', onSelect: () => onDelete(task), danger: true },
                         ]}

@@ -1,6 +1,9 @@
 import { router } from '@inertiajs/react';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { AssistantError, boldPieces, clearChat, decide, loadMessages, sendMessage, starterQuestions, type AssistantMessage } from '../../lib/assistant';
+import { useCompanion } from '../companion/companion-context';
+import Fox from '../companion/fox';
+import { useFoxMood } from '../companion/use-fox-mood';
 import Button from '../ui/button';
 import ConfirmDialog from '../ui/confirm-dialog';
 
@@ -22,6 +25,8 @@ type Props = { open: boolean; onClose: () => void };
 
 /** A chat that slides in from the right on every page. It can look things up; changes only happen when you approve them. */
 export default function AssistantPanel({ open, onClose }: Props) {
+    const { celebrate, setThinking } = useCompanion();
+    const mood = useFoxMood();
     const [messages, setMessages] = useState<AssistantMessage[] | null>(null);
     const [draft, setDraft] = useState('');
     const [sending, setSending] = useState(false);
@@ -53,6 +58,9 @@ export default function AssistantPanel({ open, onClose }: Props) {
     }, [open, messages]);
 
     useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [messages, sending]);
+
+    // The fox writes in its notebook while an answer is on the way.
+    useEffect(() => { setThinking(sending); return () => setThinking(false); }, [sending, setThinking]);
 
     async function send(text: string) {
         const content = text.trim();
@@ -91,7 +99,10 @@ export default function AssistantPanel({ open, onClose }: Props) {
             setMessages(current => (current ?? []).map(item => item.id === updated.id ? updated : item));
 
             // An approved change alters the planner, so the page behind the panel is refreshed.
-            if (decision === 'approve') router.reload();
+            if (decision === 'approve') {
+                router.reload();
+                celebrate();
+            }
         } catch (problem) {
             setError(problem instanceof AssistantError ? problem.message : 'Something went wrong. Please try again.');
         } finally {
@@ -132,9 +143,12 @@ export default function AssistantPanel({ open, onClose }: Props) {
             className={`fixed inset-y-0 right-0 z-40 flex w-full max-w-[420px] flex-col border-l border-[var(--pm-border)] bg-white shadow-[-12px_0_40px_#252b3d1a] transition-transform duration-300 ease-out ${open ? 'translate-x-0' : 'translate-x-full'}`}
         >
             <div className="flex items-start justify-between gap-3 border-b border-[var(--pm-border)] px-5 py-4">
-                <div>
-                    <h2 className="font-semibold">Assistant</h2>
-                    <p className="mt-0.5 text-xs text-[var(--pm-muted)]">Runs on your computer. Asks before it changes anything.</p>
+                <div className="flex min-w-0 items-center gap-3">
+                    <Fox mood={mood} className="size-12 shrink-0" />
+                    <div className="min-w-0">
+                        <h2 className="font-semibold">Assistant</h2>
+                        <p className="mt-0.5 text-xs text-[var(--pm-muted)]">Runs on your computer. Asks before it changes anything.</p>
+                    </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                     {messages !== null && messages.length > 0 && <Button type="button" variant="secondary" size="small" className="whitespace-nowrap" onClick={() => setConfirmNew(true)}>New chat</Button>}
