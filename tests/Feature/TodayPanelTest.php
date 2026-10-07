@@ -62,3 +62,17 @@ it('leaves today\'s Google events to the calendar\'s own when it shows the curre
 
     expect(googleCalls('GET', '/calendars/primary-id/events'))->toHaveCount(0);
 });
+
+it('tells the dashboard when a task\'s next session starts, ignoring sessions already over', function () {
+    $user = googleUser(['import_calendar_ids' => []]);
+    $task = $user->tasks()->create(['title' => 'Study', 'priority' => 'normal']);
+    plannedSession($user, $task, '2026-10-07 12:00:00');
+    plannedSession($user, $task, '2026-10-08 15:00:00');
+    plannedSession($user, $task, '2026-10-07 22:00:00');
+    $unplanned = $user->tasks()->create(['title' => 'Read', 'priority' => 'normal']);
+
+    $this->actingAs($user)->get('/?timezone=America/New_York')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('tasks', fn ($tasks) => collect($tasks)->firstWhere('id', $task->id)['next_session_at'] === '2026-10-07T22:00:00+00:00'
+                && collect($tasks)->firstWhere('id', $unplanned->id)['next_session_at'] === null));
+});

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GoogleEvent, PlannerSession, PlannerTask, RoutineOccurrence } from '../../resources/js/lib/planner';
-import { buildAgenda, buildAttention } from '../../resources/js/lib/today';
+import { buildAgenda, buildAttention, isPlanned } from '../../resources/js/lib/today';
 
 // Wednesday 2026-10-07, 1:40 PM in New York (17:40 UTC).
 const now = new Date('2026-10-07T17:40:00Z');
@@ -9,6 +9,31 @@ const zone = 'America/New_York';
 const task = (id: number, due_at: string | null, overrides: Partial<PlannerTask> = {}): PlannerTask => ({
     id, responsibility_id: null, title: `Task ${id}`, notes: null, priority: 'normal', estimate_minutes: null,
     due_at, due_has_time: true, completed_at: null, calendar_sessions_count: 0, ...overrides,
+});
+
+describe('planned tasks', () => {
+    it('leave Needs attention once a session is reserved before the deadline', () => {
+        const { soon } = buildAttention([
+            task(1, '2026-10-07T23:00:00Z', { next_session_at: '2026-10-07T20:00:00Z' }),
+            task(2, '2026-10-07T23:00:00Z', { next_session_at: '2026-10-08T01:00:00Z' }),
+            task(3, '2026-10-07T23:00:00Z', { next_session_at: null }),
+        ], now, zone);
+
+        expect(soon.map(item => item.id)).toEqual([2, 3]);
+    });
+
+    it('stay when they are overdue, even with a session planned', () => {
+        const { overdue } = buildAttention([task(1, '2026-10-06T12:00:00Z', { next_session_at: '2026-10-07T20:00:00Z' })], now, zone);
+
+        expect(overdue.map(item => item.id)).toEqual([1]);
+    });
+
+    it('treat a date-only deadline as met by a session on or before that day', () => {
+        const dateOnly = (session: string) => task(1, '2026-10-08T12:00:00Z', { due_has_time: false, next_session_at: session });
+
+        expect(isPlanned(dateOnly('2026-10-08T22:00:00Z'), zone)).toBe(true);
+        expect(isPlanned(dateOnly('2026-10-09T15:00:00Z'), zone)).toBe(false);
+    });
 });
 
 describe('buildAttention', () => {

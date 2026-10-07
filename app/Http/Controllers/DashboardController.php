@@ -36,8 +36,14 @@ class DashboardController extends Controller
                 });
             })
             ->with('canvasAssignment:id,task_id,html_url,canvas_course_id', 'canvasAssignment.course:id,name')
-            ->withCount('calendarSessions')->orderByDesc('created_at')->orderByDesc('id')
-            ->get();
+            ->withCount('calendarSessions')
+            // The start of the task's next session that has not ended yet; a planned task is being dealt with.
+            ->withMin(['calendarSessions as next_session_at' => fn ($query) => $query->where('ends_at', '>', now())], 'starts_at')
+            ->orderByDesc('created_at')->orderByDesc('id')
+            ->get()
+            ->each(fn ($task) => $task->next_session_at = $task->next_session_at
+                ? CarbonImmutable::parse($task->next_session_at, 'UTC')->utc()->toIso8601String()
+                : null);
         $sessions = $this->sessions($user, $start, $end);
 
         // The Today panel always shows the real today, whichever week the calendar is on.

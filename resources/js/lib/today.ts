@@ -6,8 +6,22 @@ const HOURS_48 = 48 * 60 * 60 * 1000;
 export type Attention = { overdue: PlannerTask[]; soon: PlannerTask[] };
 
 /**
+ * Whether the task already has time reserved before its deadline: a session that has not ended yet and starts
+ * no later than the deadline (or, for a date-only deadline, no later than that day).
+ */
+export function isPlanned(task: PlannerTask, timezone: string): boolean {
+    if (!task.next_session_at || !task.due_at) return false;
+
+    return task.due_has_time
+        ? Date.parse(task.next_session_at) <= Date.parse(task.due_at)
+        : zonedParts(new Date(task.next_session_at), timezone).date <= (dueDay(task, timezone) ?? '');
+}
+
+/**
  * The open tasks that need attention: overdue, and due in the next 48 hours. A date-only deadline counts as
- * "soon" when it falls today or tomorrow. Each list keeps the earliest deadline first.
+ * "soon" when it falls today or tomorrow. A task that already has a session planned before its deadline is
+ * being dealt with, so it is left out of "soon" (it shows in the day's agenda instead). Overdue tasks stay
+ * either way. Each list keeps the earliest deadline first.
  */
 export function buildAttention(tasks: PlannerTask[], now: Date, timezone: string): Attention {
     const today = zonedParts(now, timezone).date;
@@ -18,7 +32,7 @@ export function buildAttention(tasks: PlannerTask[], now: Date, timezone: string
 
     return {
         overdue: open.filter(task => dueState(task, timezone) === 'overdue').sort((a, b) => compareDue(a, b, timezone)),
-        soon: open.filter(task => dueState(task, timezone) !== 'overdue' && isSoon(task)).sort((a, b) => compareDue(a, b, timezone)),
+        soon: open.filter(task => dueState(task, timezone) !== 'overdue' && isSoon(task) && !isPlanned(task, timezone)).sort((a, b) => compareDue(a, b, timezone)),
     };
 }
 
