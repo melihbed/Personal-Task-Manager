@@ -37,8 +37,12 @@ return [
     // A local Ollama server. The assistant runs entirely on this machine.
     'ollama' => [
         'url' => rtrim((string) env('OLLAMA_URL', 'http://localhost:11434'), '/'),
-        'model' => env('OLLAMA_MODEL', 'qwen2.5:7b'),
-        'timeout' => (int) env('OLLAMA_TIMEOUT', 120),
+        'model' => env('OLLAMA_MODEL', 'gpt-oss:latest'),
+        // How hard a reasoning model (gpt-oss) thinks before answering: low, medium or high. Models without reasoning ignore it.
+        'think' => env('OLLAMA_THINK', 'low'),
+        'timeout' => (int) env('OLLAMA_TIMEOUT', 180),
+        // How long Ollama keeps the model in memory after an answer. Loading a large model can take a minute, so it stays ready.
+        'keep_alive' => env('OLLAMA_KEEP_ALIVE', '30m'),
     ],
 
     'slack' => [

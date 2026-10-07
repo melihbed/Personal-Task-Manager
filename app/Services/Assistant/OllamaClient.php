@@ -26,6 +26,9 @@ class OllamaClient
                     'messages' => $messages,
                     'tools' => $tools,
                     'stream' => false,
+                    'keep_alive' => config('services.ollama.keep_alive'),
+                    // Only reasoning models accept this; others would refuse the request.
+                    ...(str_starts_with((string) $model, 'gpt-oss') && filled(config('services.ollama.think')) ? ['think' => config('services.ollama.think')] : []),
                     // Ollama's default 4096-token window is too small for the tool list plus a day of schedule.
                     'options' => ['temperature' => 0.2, 'num_ctx' => 8192],
                 ]);

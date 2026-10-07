@@ -14,9 +14,21 @@ function Text({ content }: { content: string }) {
 }
 
 function Thinking() {
+    const [slow, setSlow] = useState(false);
+
+    // A model that has gone to sleep takes a while to wake, so say so instead of leaving the dots spinning.
+    useEffect(() => {
+        const timer = window.setTimeout(() => setSlow(true), 10_000);
+
+        return () => window.clearTimeout(timer);
+    }, []);
+
     return (
-        <div role="status" aria-label="The assistant is thinking" className="flex w-fit items-center gap-1.5 rounded-2xl bg-[var(--pm-background)] px-4 py-3">
-            {[0, 150, 300].map(delay => <span key={delay} className="size-1.5 animate-pulse rounded-full bg-[var(--pm-muted)]" style={{ animationDelay: `${delay}ms` }} />)}
+        <div role="status" aria-label="The assistant is thinking">
+            <div className="flex w-fit items-center gap-1.5 rounded-2xl bg-[var(--pm-background)] px-4 py-3">
+                {[0, 150, 300].map(delay => <span key={delay} className="size-1.5 animate-pulse rounded-full bg-[var(--pm-muted)]" style={{ animationDelay: `${delay}ms` }} />)}
+            </div>
+            {slow && <p className="mt-2 text-xs text-[var(--pm-muted)]">Still working. The first answer after a break can take up to a minute while the model wakes up.</p>}
         </div>
     );
 }
@@ -180,7 +192,7 @@ export default function AssistantPanel({ open, onClose }: Props) {
                                     <p className={`text-sm ${proposal.status === 'dismissed' ? 'text-[var(--pm-muted)] line-through' : ''}`}>{proposal.summary}</p>
                                     {proposal.status === 'pending' && (
                                         <div className="pm-button-group mt-3">
-                                            <Button type="button" size="small" loading={deciding === `${message.id}:${index}`} loadingLabel="Applying" disabled={deciding !== null} onClick={() => void choose(message, index, 'approve')}>Approve</Button>
+                                            <Button type="button" variant={proposal.destructive ? 'danger' : 'primary'} size="small" loading={deciding === `${message.id}:${index}`} loadingLabel="Applying" disabled={deciding !== null} onClick={() => void choose(message, index, 'approve')}>{proposal.destructive ? 'Delete' : 'Approve'}</Button>
                                             <Button type="button" variant="secondary" size="small" disabled={deciding !== null} onClick={() => void choose(message, index, 'dismiss')}>Dismiss</Button>
                                         </div>
                                     )}

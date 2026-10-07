@@ -1,6 +1,6 @@
 import { ApiError, request } from './http';
 
-export type Proposal = { summary: string; status: 'pending' | 'approved' | 'dismissed'; result: string | null };
+export type Proposal = { summary: string; destructive: boolean; status: 'pending' | 'approved' | 'dismissed'; result: string | null };
 export type AssistantMessage = { id: number; role: 'user' | 'assistant'; content: string; proposals: Proposal[] };
 
 export const starterQuestions = [

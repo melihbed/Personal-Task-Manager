@@ -3,6 +3,7 @@
 namespace App\Services\Assistant;
 
 use App\Models\CalendarSession;
+use App\Models\Routine;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\GoogleCalendar\GoogleCalendarEvents;
@@ -42,6 +43,7 @@ class AssistantTools
                 'to_date' => $text('Last day, in the same forms. At most 14 days after from_date. Same as from_date for a single day.'),
             ], ['from_date', 'to_date']),
             $tool('list_coursework', 'List the user\'s Canvas assignments, quizzes and discussions that are not finished, with course, due date and whether they are missing.'),
+            $tool('list_routines', 'List the user\'s repeating routines (things they do on certain weekdays), with their ids.'),
             $tool('create_task', 'Propose a new task. The user must approve it before it exists.', [
                 'title' => $text('Short task title.'),
                 'due_date' => $text('Optional deadline day: YYYY-MM-DD, today, tomorrow, or a weekday name like friday or next tuesday.'),
@@ -57,6 +59,36 @@ class AssistantTools
             $tool('complete_task', 'Propose marking an existing task as done. The user must approve it.', [
                 'task_id' => ['type' => 'integer', 'description' => 'The id from list_tasks.'],
             ], ['task_id']),
+            $tool('update_task', 'Propose changing an existing task: its title, deadline, priority or notes. Pass only what changes. The user must approve it.', [
+                'task_id' => ['type' => 'integer', 'description' => 'The id from list_tasks.'],
+                'title' => $text('New title.'),
+                'due_date' => $text('New deadline day: YYYY-MM-DD, today, tomorrow, a weekday name, or "none" to remove the deadline.'),
+                'due_time' => $text('New deadline time, 24-hour HH:MM. Only with due_date.'),
+                'priority' => ['type' => 'string', 'enum' => ['low', 'normal', 'high']],
+                'notes' => $text('New notes for the task.'),
+            ], ['task_id']),
+            $tool('delete_task', 'Propose deleting a task and its planned sessions. Only when the user clearly asks to delete or remove it. The user must approve it.', [
+                'task_id' => ['type' => 'integer', 'description' => 'The id from list_tasks.'],
+            ], ['task_id']),
+            $tool('create_routine', 'Propose a new repeating routine, such as "gym on Monday, Wednesday and Friday at 6 PM". The user must approve it.', [
+                'title' => $text('Short routine name.'),
+                'days' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Weekday names such as ["monday","wednesday"], or "weekdays", "weekends" or "daily".'],
+                'start_time' => $text('Start time, 24-hour HH:MM.'),
+                'minutes' => ['type' => 'integer', 'description' => 'How long each occurrence lasts, 5 to 1440.'],
+                'start_date' => $text('First day it applies. Defaults to today.'),
+                'end_date' => $text('Optional last day it applies.'),
+            ], ['title', 'days', 'start_time', 'minutes']),
+            $tool('update_routine', 'Propose changing an existing routine. Pass only what changes. The user must approve it.', [
+                'routine_id' => ['type' => 'integer', 'description' => 'The id from list_routines.'],
+                'title' => $text('New name.'),
+                'days' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'The new full set of weekdays.'],
+                'start_time' => $text('New start time, 24-hour HH:MM.'),
+                'minutes' => ['type' => 'integer', 'description' => 'New length in minutes.'],
+                'end_date' => $text('New last day, or "none" to repeat with no end.'),
+            ], ['routine_id']),
+            $tool('delete_routine', 'Propose deleting a routine. Only when the user clearly asks to delete or remove it. The user must approve it.', [
+                'routine_id' => ['type' => 'integer', 'description' => 'The id from list_routines.'],
+            ], ['routine_id']),
         ];
     }
 
@@ -76,6 +108,12 @@ class AssistantTools
                 'create_task' => $this->proposal($this->proposeCreateTask($timezone, $arguments)),
                 'plan_session' => $this->proposal($this->proposePlanSession($user, $timezone, $arguments)),
                 'complete_task' => $this->proposal($this->proposeCompleteTask($user, $timezone, $arguments)),
+                'list_routines' => ['result' => ['routines' => $this->listRoutines($user)], 'proposal' => null],
+                'update_task' => $this->proposal($this->proposeUpdateTask($user, $timezone, $arguments)),
+                'delete_task' => $this->proposal($this->proposeDeleteTask($user, $timezone, $arguments)),
+                'create_routine' => $this->proposal($this->proposeCreateRoutine($timezone, $arguments)),
+                'update_routine' => $this->proposal($this->proposeUpdateRoutine($user, $timezone, $arguments)),
+                'delete_routine' => $this->proposal($this->proposeDeleteRoutine($user, $timezone, $arguments)),
                 default => ['result' => ['error' => "Unknown tool \"{$name}\"."], 'proposal' => null],
             };
         } catch (ProposalFailed $exception) {
@@ -262,6 +300,286 @@ class AssistantTools
             'timezone' => $timezone,
             'status' => 'pending',
         ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function listRoutines(User $user): array
+    {
+        return $user->routines()->orderBy('title')->get()->map(fn (Routine $routine) => [
+            'id' => $routine->id,
+            'title' => $routine->title,
+            'days' => $this->dayNames($routine->days),
+            'start_time' => CarbonImmutable::createFromFormat('H:i:s', $routine->start_time)->format('g:i A').' ('.$routine->timezone.')',
+            'minutes' => $routine->duration_minutes,
+            'from' => $routine->starts_on->format('D M j, Y'),
+            'until' => $routine->ends_on?->format('D M j, Y') ?? 'no end',
+        ])->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function proposeUpdateTask(User $user, string $timezone, array $arguments): array
+    {
+        $task = $this->ownedTask($user, $arguments['task_id'] ?? null);
+        $changes = [];
+        $parts = [];
+
+        if (isset($arguments['title']) && trim((string) $arguments['title']) !== '') {
+            $title = trim((string) $arguments['title']);
+
+            if (mb_strlen($title) > 255) {
+                throw new ProposalFailed('A task title can be up to 255 characters.');
+            }
+
+            $changes['title'] = $title;
+            $parts[] = "title to “{$title}”";
+        }
+
+        if (isset($arguments['due_date']) && $arguments['due_date'] !== '') {
+            if (strtolower(trim((string) $arguments['due_date'])) === 'none') {
+                $changes['due_date'] = null;
+                $parts[] = 'no deadline';
+            } else {
+                $date = $this->day((string) $arguments['due_date'], $timezone);
+                $time = isset($arguments['due_time']) && $arguments['due_time'] !== '' ? $this->time((string) $arguments['due_time']) : null;
+                $changes['due_date'] = $date->toDateString();
+                $changes['due_time'] = $time;
+                $parts[] = 'deadline '.$date->format('D M j').($time !== null ? ', '.CarbonImmutable::createFromFormat('H:i', $time)->format('g:i A') : '');
+            }
+        } elseif (isset($arguments['due_time']) && $arguments['due_time'] !== '') {
+            throw new ProposalFailed('due_time needs a due_date.');
+        }
+
+        if (isset($arguments['priority'])) {
+            if (! in_array($arguments['priority'], ['low', 'normal', 'high'], true)) {
+                throw new ProposalFailed('priority must be low, normal or high.');
+            }
+
+            $changes['priority'] = $arguments['priority'];
+            $parts[] = "priority {$arguments['priority']}";
+        }
+
+        if (isset($arguments['notes'])) {
+            $changes['notes'] = trim((string) $arguments['notes']);
+            $parts[] = 'notes';
+        }
+
+        if ($changes === []) {
+            throw new ProposalFailed('Nothing to change. Pass at least one of title, due_date, priority or notes.');
+        }
+
+        return [
+            'type' => 'update_task',
+            'args' => ['task_id' => $task->id, 'changes' => $changes],
+            'summary' => "Change “{$task->title}”: ".implode(', ', $parts),
+            'timezone' => $timezone,
+            'status' => 'pending',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function proposeDeleteTask(User $user, string $timezone, array $arguments): array
+    {
+        $task = $this->ownedTask($user, $arguments['task_id'] ?? null);
+        $sessions = $task->calendarSessions()->count();
+
+        return [
+            'type' => 'delete_task',
+            'args' => ['task_id' => $task->id],
+            'summary' => "Delete task “{$task->title}”".($sessions > 0 ? " and its {$sessions} planned ".($sessions === 1 ? 'session' : 'sessions') : ''),
+            'timezone' => $timezone,
+            'status' => 'pending',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function proposeCreateRoutine(string $timezone, array $arguments): array
+    {
+        $title = trim((string) ($arguments['title'] ?? ''));
+
+        if ($title === '' || mb_strlen($title) > 255) {
+            throw new ProposalFailed('A routine needs a title of up to 255 characters.');
+        }
+
+        $days = $this->weekdays($arguments['days'] ?? null);
+        $time = $this->time((string) ($arguments['start_time'] ?? ''));
+        $minutes = $this->minutes($arguments['minutes'] ?? null);
+        $starts = isset($arguments['start_date']) && $arguments['start_date'] !== '' ? $this->day((string) $arguments['start_date'], $timezone) : CarbonImmutable::now($timezone)->startOfDay();
+        $ends = isset($arguments['end_date']) && $arguments['end_date'] !== '' && strtolower((string) $arguments['end_date']) !== 'none' ? $this->day((string) $arguments['end_date'], $timezone) : null;
+
+        if ($ends !== null && $ends < $starts) {
+            throw new ProposalFailed('end_date must not be before start_date.');
+        }
+
+        return [
+            'type' => 'create_routine',
+            'args' => ['title' => $title, 'days' => $days, 'start_time' => $time, 'minutes' => $minutes, 'starts_on' => $starts->toDateString(), 'ends_on' => $ends?->toDateString()],
+            'summary' => "Add routine “{$title}” every ".$this->dayList($days).' at '.CarbonImmutable::createFromFormat('H:i', $time)->format('g:i A')." for {$minutes} minutes",
+            'timezone' => $timezone,
+            'status' => 'pending',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function proposeUpdateRoutine(User $user, string $timezone, array $arguments): array
+    {
+        $routine = $this->ownedRoutine($user, $arguments['routine_id'] ?? null);
+        $changes = [];
+        $parts = [];
+
+        if (isset($arguments['title']) && trim((string) $arguments['title']) !== '') {
+            $changes['title'] = trim((string) $arguments['title']);
+            $parts[] = "name to “{$changes['title']}”";
+        }
+
+        if (isset($arguments['days']) && $arguments['days'] !== []) {
+            $changes['days'] = $this->weekdays($arguments['days']);
+            $parts[] = 'days to '.$this->dayList($changes['days']);
+        }
+
+        if (isset($arguments['start_time']) && $arguments['start_time'] !== '') {
+            $changes['start_time'] = $this->time((string) $arguments['start_time']);
+            $parts[] = 'start '.CarbonImmutable::createFromFormat('H:i', $changes['start_time'])->format('g:i A');
+        }
+
+        if (isset($arguments['minutes'])) {
+            $changes['minutes'] = $this->minutes($arguments['minutes']);
+            $parts[] = "length {$changes['minutes']} minutes";
+        }
+
+        if (isset($arguments['end_date']) && $arguments['end_date'] !== '') {
+            if (strtolower((string) $arguments['end_date']) === 'none') {
+                $changes['ends_on'] = null;
+                $parts[] = 'no end date';
+            } else {
+                $end = $this->day((string) $arguments['end_date'], $timezone);
+
+                if ($end->toDateString() < $routine->starts_on->toDateString()) {
+                    throw new ProposalFailed('end_date must not be before the routine starts.');
+                }
+
+                $changes['ends_on'] = $end->toDateString();
+                $parts[] = 'last day '.$end->format('D M j');
+            }
+        }
+
+        if ($changes === []) {
+            throw new ProposalFailed('Nothing to change. Pass at least one of title, days, start_time, minutes or end_date.');
+        }
+
+        return [
+            'type' => 'update_routine',
+            'args' => ['routine_id' => $routine->id, 'changes' => $changes],
+            'summary' => "Change routine “{$routine->title}”: ".implode(', ', $parts),
+            'timezone' => $timezone,
+            'status' => 'pending',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function proposeDeleteRoutine(User $user, string $timezone, array $arguments): array
+    {
+        $routine = $this->ownedRoutine($user, $arguments['routine_id'] ?? null);
+
+        return [
+            'type' => 'delete_routine',
+            'args' => ['routine_id' => $routine->id],
+            'summary' => "Delete routine “{$routine->title}” ({$this->dayList($routine->days)})",
+            'timezone' => $timezone,
+            'status' => 'pending',
+        ];
+    }
+
+    private function ownedTask(User $user, mixed $id): Task
+    {
+        return (is_numeric($id) ? $user->tasks()->find((int) $id) : null)
+            ?? throw new ProposalFailed('There is no task with that id. Use list_tasks to find the right id.');
+    }
+
+    private function ownedRoutine(User $user, mixed $id): Routine
+    {
+        return (is_numeric($id) ? $user->routines()->find((int) $id) : null)
+            ?? throw new ProposalFailed('There is no routine with that id. Use list_routines to find the right id.');
+    }
+
+    /**
+     * Weekday names, "weekdays", "weekends" or "daily" (or ISO numbers 1 to 7), as sorted ISO weekday numbers.
+     *
+     * @return list<int>
+     */
+    private function weekdays(mixed $value): array
+    {
+        $names = ['mon' => 1, 'tue' => 2, 'wed' => 3, 'thu' => 4, 'fri' => 5, 'sat' => 6, 'sun' => 7];
+        $items = is_array($value) ? $value : (is_string($value) && $value !== '' ? preg_split('/[\s,]+/', $value, -1, PREG_SPLIT_NO_EMPTY) : []);
+        $days = [];
+
+        foreach ($items as $item) {
+            $word = strtolower(trim((string) $item));
+
+            if (in_array($word, ['daily', 'everyday', 'every day', 'all'], true)) {
+                $days = [...$days, 1, 2, 3, 4, 5, 6, 7];
+            } elseif ($word === 'weekdays') {
+                $days = [...$days, 1, 2, 3, 4, 5];
+            } elseif ($word === 'weekends') {
+                $days = [...$days, 6, 7];
+            } elseif (ctype_digit($word) && (int) $word >= 1 && (int) $word <= 7) {
+                $days[] = (int) $word;
+            } elseif (isset($names[substr($word, 0, 3)]) && strlen($word) >= 3) {
+                $days[] = $names[substr($word, 0, 3)];
+            } else {
+                throw new ProposalFailed("\"{$item}\" is not a weekday. Use names like monday, or weekdays, weekends, daily.");
+            }
+        }
+
+        $days = array_values(array_unique($days));
+        sort($days);
+
+        return $days === [] ? throw new ProposalFailed('Choose at least one day.') : $days;
+    }
+
+    private function minutes(mixed $value): int
+    {
+        $minutes = is_numeric($value) ? (int) $value : 0;
+
+        return $minutes >= 5 && $minutes <= 1440 ? $minutes : throw new ProposalFailed('minutes must be between 5 and 1440.');
+    }
+
+    /**
+     * @param  list<int>  $days
+     * @return list<string>
+     */
+    private function dayNames(array $days): array
+    {
+        return array_map(fn (int $day) => [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 'Sat', 7 => 'Sun'][$day], $days);
+    }
+
+    /**
+     * @param  list<int>  $days
+     */
+    private function dayList(array $days): string
+    {
+        return match (true) {
+            $days === [1, 2, 3, 4, 5, 6, 7] => 'day',
+            $days === [1, 2, 3, 4, 5] => 'weekday',
+            $days === [6, 7] => 'weekend day',
+            default => implode(', ', $this->dayNames($days)),
+        };
     }
 
     private function ownedOpenTask(User $user, mixed $id): Task

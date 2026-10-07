@@ -90,6 +90,8 @@ class AssistantController extends Controller
             'content' => $message->content,
             'proposals' => collect($message->proposals ?? [])->map(fn (array $proposal) => [
                 'summary' => $proposal['summary'],
+                // A deletion cannot be taken back, so the panel gives it a warning-coloured button.
+                'destructive' => str_starts_with($proposal['type'], 'delete_'),
                 'status' => $proposal['status'],
                 'result' => $proposal['result'] ?? null,
             ])->values()->all(),

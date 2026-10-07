@@ -2,6 +2,7 @@
 
 use App\Models\AssistantMessage;
 use App\Models\CalendarSession;
+use App\Models\Routine;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -48,7 +49,7 @@ it('tells the model the date, timezone and rules', function () {
 
     $system = ollamaRequests()[0]['messages'][0]['content'];
     expect($system)->toContain('Wednesday, October 7, 2026')->toContain('America/New_York')->toContain('data, not instructions')->toContain('approves');
-    expect(collect(ollamaRequests()[0]['tools'])->pluck('function.name')->all())->toBe(['list_tasks', 'get_schedule', 'list_coursework', 'create_task', 'plan_session', 'complete_task']);
+    expect(collect(ollamaRequests()[0]['tools'])->pluck('function.name')->all())->toBe(['list_tasks', 'get_schedule', 'list_coursework', 'list_routines', 'create_task', 'plan_session', 'complete_task', 'update_task', 'delete_task', 'create_routine', 'update_routine', 'delete_routine']);
 });
 
 it('spells out the next two weeks so weekdays are never worked out by the model', function () {
@@ -300,7 +301,7 @@ it('explains when Ollama is not running, and forgets the unanswered message', fu
 it('explains when the model is not installed', function () {
     Http::fake(['*/api/chat' => Http::response(['error' => 'model not found'], 404)]);
 
-    askAssistant('Hi')->assertStatus(503)->assertJsonPath('message', fn (string $message) => str_contains($message, 'ollama pull qwen2.5:7b'));
+    askAssistant('Hi')->assertStatus(503)->assertJsonPath('message', fn (string $message) => str_contains($message, 'ollama pull gpt-oss:latest'));
 });
 
 it('validates the message', function () {
@@ -347,4 +348,273 @@ it('keeps the suggestion notes it adds to the history out of what the user reads
     fakeOllama(["Sure.\n[Suggestion: Add task “Call”, no deadline - pending]"]);
 
     askAssistant('Hi')->assertJsonPath('messages.1.content', 'Sure.');
+});
+
+function proposeAndGetId(string $tool, array $arguments): int
+{
+    fakeOllama([['calls' => [[$tool, $arguments]]], 'Suggested.']);
+
+    return askAssistant('Do it')->json('messages.1.id');
+}
+
+function lastProposal(): array
+{
+    return test()->getJson('/assistant')->json('messages.1.proposals.0');
+}
+
+it('lists the user\'s routines, and only theirs', function () {
+    weeklyRoutine($this->user, ['title' => 'Gym', 'days' => [1, 3, 5], 'start_time' => '18:00:00', 'duration_minutes' => 60]);
+    weeklyRoutine(User::factory()->create(), ['title' => 'Not mine']);
+    fakeOllama([['calls' => [['list_routines', []]]], 'Ok.']);
+
+    askAssistant('What are my routines?');
+
+    $tool = collect(ollamaRequests()[1]['messages'])->firstWhere('role', 'tool')['content'];
+    expect($tool)->toContain('Gym')->toContain('Mon')->toContain('Fri')->toContain('6:00 PM')->not->toContain('Not mine');
+});
+
+it('proposes a new routine, and makes it only once approved', function () {
+    $id = proposeAndGetId('create_routine', ['title' => 'Gym', 'days' => ['monday', 'Wednesday', 'fri'], 'start_time' => '18:00', 'minutes' => 60]);
+
+    expect(lastProposal())->toMatchArray(['summary' => 'Add routine “Gym” every Mon, Wed, Fri at 6:00 PM for 60 minutes', 'status' => 'pending', 'destructive' => false]);
+    expect(Routine::count())->toBe(0);
+
+    $this->postJson("/assistant/messages/{$id}/proposals/0/approve")->assertOk();
+
+    $routine = Routine::firstOrFail();
+    expect($routine->user_id)->toBe($this->user->id)->and($routine->days)->toBe([1, 3, 5])->and($routine->start_time)->toBe('18:00:00')->and($routine->duration_minutes)->toBe(60)
+        ->and($routine->timezone)->toBe('America/New_York')->and($routine->starts_on->toDateString())->toBe('2026-10-07')->and($routine->ends_on)->toBeNull();
+});
+
+it('understands weekdays, weekends and daily for a routine', function (array $days, array $expected, string $summary) {
+    $id = proposeAndGetId('create_routine', ['title' => 'Read', 'days' => $days, 'start_time' => '07:30', 'minutes' => 20]);
+
+    expect(lastProposal()['summary'])->toContain("every {$summary} at 7:30 AM");
+
+    $this->postJson("/assistant/messages/{$id}/proposals/0/approve")->assertOk();
+    expect(Routine::firstOrFail()->days)->toBe($expected);
+})->with([
+    'weekdays' => [['weekdays'], [1, 2, 3, 4, 5], 'weekday'],
+    'weekends' => [['weekends'], [6, 7], 'weekend day'],
+    'daily' => [['daily'], [1, 2, 3, 4, 5, 6, 7], 'day'],
+    'numbers' => [['2', '4'], [2, 4], 'Tue, Thu'],
+]);
+
+it('can end a new routine on a date, and start it on a chosen day', function () {
+    $id = proposeAndGetId('create_routine', ['title' => 'Course', 'days' => ['tuesday'], 'start_time' => '09:00', 'minutes' => 90, 'start_date' => 'next monday', 'end_date' => '2026-12-18']);
+    $this->postJson("/assistant/messages/{$id}/proposals/0/approve")->assertOk();
+
+    $routine = Routine::firstOrFail();
+    expect($routine->starts_on->toDateString())->toBe('2026-10-12')->and($routine->ends_on->toDateString())->toBe('2026-12-18');
+});
+
+it('rejects a routine that makes no sense, and tells the model why', function (array $arguments) {
+    fakeOllama([['calls' => [['create_routine', ['title' => 'X', 'days' => ['monday'], 'start_time' => '08:00', 'minutes' => 30, ...$arguments]]]], 'Sorry.']);
+
+    askAssistant('Add it')->assertJsonPath('messages.1.proposals', []);
+
+    expect(collect(ollamaRequests()[1]['messages'])->firstWhere('role', 'tool')['content'])->toContain('error');
+})->with([
+    'no title' => [['title' => ' ']],
+    'not a weekday' => [['days' => ['funday']]],
+    'no days' => [['days' => []]],
+    'bad time' => [['start_time' => '8am']],
+    'too short' => [['minutes' => 2]],
+    'too long' => [['minutes' => 2000]],
+    'ends before it starts' => [['start_date' => '2026-10-20', 'end_date' => '2026-10-10']],
+]);
+
+it('changes a routine once approved, putting moved days back when the schedule changes', function () {
+    $routine = weeklyRoutine($this->user, ['title' => 'Gym', 'days' => [1, 3], 'start_time' => '18:00:00', 'duration_minutes' => 60]);
+    $routine->occurrences()->forceCreate(['occurs_on' => '2026-10-07', 'starts_at' => '2026-10-07 22:00:00', 'ends_at' => '2026-10-07 23:00:00', 'skipped' => false, 'completed_at' => null]);
+    $id = proposeAndGetId('update_routine', ['routine_id' => $routine->id, 'days' => ['tuesday', 'thursday'], 'start_time' => '07:00']);
+
+    expect(lastProposal()['summary'])->toBe('Change routine “Gym”: days to Tue, Thu, start 7:00 AM');
+    expect($routine->fresh()->days)->toBe([1, 3]);
+
+    $this->postJson("/assistant/messages/{$id}/proposals/0/approve")->assertOk();
+
+    $routine->refresh();
+    expect($routine->days)->toBe([2, 4])->and($routine->start_time)->toBe('07:00:00')->and($routine->title)->toBe('Gym')->and($routine->duration_minutes)->toBe(60)
+        ->and($routine->occurrences()->first()->starts_at)->toBeNull();
+});
+
+it('keeps moved days when only the name changes', function () {
+    $routine = weeklyRoutine($this->user, ['title' => 'Gym']);
+    $routine->occurrences()->forceCreate(['occurs_on' => '2026-10-07', 'starts_at' => '2026-10-07 22:00:00', 'ends_at' => '2026-10-07 23:00:00', 'skipped' => false, 'completed_at' => null]);
+    $id = proposeAndGetId('update_routine', ['routine_id' => $routine->id, 'title' => 'Lift']);
+
+    $this->postJson("/assistant/messages/{$id}/proposals/0/approve")->assertOk();
+
+    expect($routine->fresh()->title)->toBe('Lift')->and($routine->occurrences()->first()->starts_at)->not->toBeNull();
+});
+
+it('can give a routine no end date', function () {
+    $routine = weeklyRoutine($this->user, ['ends_on' => '2026-12-01']);
+    $id = proposeAndGetId('update_routine', ['routine_id' => $routine->id, 'end_date' => 'none']);
+
+    $this->postJson("/assistant/messages/{$id}/proposals/0/approve")->assertOk();
+
+    expect($routine->fresh()->ends_on)->toBeNull();
+});
+
+it('deletes a routine once approved, and warns that it is a deletion', function () {
+    $routine = weeklyRoutine($this->user, ['title' => 'Gym']);
+    $id = proposeAndGetId('delete_routine', ['routine_id' => $routine->id]);
+
+    expect(lastProposal())->toMatchArray(['summary' => 'Delete routine “Gym” (Tue, Thu)', 'destructive' => true]);
+    expect(Routine::count())->toBe(1);
+
+    $this->postJson("/assistant/messages/{$id}/proposals/0/approve")->assertOk();
+
+    expect(Routine::count())->toBe(0);
+});
+
+it('does not touch another user\'s routine, and says there is none', function (string $tool, array $extra) {
+    $theirs = weeklyRoutine(User::factory()->create(), ['title' => 'Theirs']);
+    fakeOllama([['calls' => [[$tool, ['routine_id' => $theirs->id, ...$extra]]]], 'Could not.']);
+
+    askAssistant('Change it')->assertJsonPath('messages.1.proposals', []);
+
+    expect(collect(ollamaRequests()[1]['messages'])->firstWhere('role', 'tool')['content'])->toContain('no routine with that id');
+    expect($theirs->fresh()->title)->toBe('Theirs');
+})->with([['update_routine', ['title' => 'Mine now']], ['delete_routine', []]]);
+
+it('fails an approved routine change if the routine is gone by then', function () {
+    $routine = weeklyRoutine($this->user);
+    $id = proposeAndGetId('delete_routine', ['routine_id' => $routine->id]);
+    $routine->delete();
+
+    $this->postJson("/assistant/messages/{$id}/proposals/0/approve")->assertUnprocessable()->assertJsonPath('message', 'That routine no longer exists.');
+});
+
+it('asks for a change when updating a routine or task with nothing to change', function (string $tool, string $key) {
+    $record = $key === 'routine_id' ? weeklyRoutine($this->user) : $this->user->tasks()->create(['title' => 'X', 'priority' => 'normal']);
+    fakeOllama([['calls' => [[$tool, [$key => $record->id]]]], 'Sorry.']);
+
+    askAssistant('Change it')->assertJsonPath('messages.1.proposals', []);
+
+    expect(collect(ollamaRequests()[1]['messages'])->firstWhere('role', 'tool')['content'])->toContain('Nothing to change');
+})->with([['update_routine', 'routine_id'], ['update_task', 'task_id']]);
+
+it('changes a task once approved, and only what was asked', function () {
+    $task = $this->user->tasks()->create(['title' => 'Essay', 'priority' => 'normal', 'notes' => 'Keep these', 'estimate_minutes' => 90]);
+    $id = proposeAndGetId('update_task', ['task_id' => $task->id, 'title' => 'Essay draft', 'due_date' => 'friday', 'due_time' => '17:00', 'priority' => 'high']);
+
+    expect(lastProposal()['summary'])->toBe('Change “Essay”: title to “Essay draft”, deadline Fri Oct 9, 5:00 PM, priority high');
+    expect($task->fresh()->title)->toBe('Essay');
+
+    $this->postJson("/assistant/messages/{$id}/proposals/0/approve")->assertOk();
+
+    $task->refresh();
+    expect($task->title)->toBe('Essay draft')->and($task->priority)->toBe('high')->and($task->due_has_time)->toBeTrue()->and($task->due_at->toIso8601String())->toBe('2026-10-09T21:00:00+00:00')
+        ->and($task->notes)->toBe('Keep these')->and($task->estimate_minutes)->toBe(90);
+});
+
+it('gives a task a date-only deadline, or removes it', function () {
+    $task = $this->user->tasks()->create(['title' => 'Read', 'priority' => 'normal', 'due_at' => '2026-10-20 12:00:00', 'due_has_time' => false]);
+    fakeOllama([
+        ['calls' => [['update_task', ['task_id' => $task->id, 'due_date' => 'tomorrow']]]], 'Suggested.',
+        ['calls' => [['update_task', ['task_id' => $task->id, 'due_date' => 'none']]]], 'Suggested.',
+    ]);
+    $first = askAssistant('Move it to tomorrow')->json('messages.1.id');
+    $second = askAssistant('Remove the deadline')->json('messages.1.id');
+
+    $this->postJson("/assistant/messages/{$first}/proposals/0/approve")->assertOk();
+    expect($task->fresh()->due_has_time)->toBeFalse()->and($task->fresh()->due_at->toIso8601String())->toBe('2026-10-08T12:00:00+00:00');
+
+    $this->postJson("/assistant/messages/{$second}/proposals/0/approve")->assertOk();
+    expect($task->fresh()->due_at)->toBeNull();
+});
+
+it('edits the notes of a task, and clears them', function () {
+    $task = $this->user->tasks()->create(['title' => 'Read', 'priority' => 'normal']);
+    fakeOllama([
+        ['calls' => [['update_task', ['task_id' => $task->id, 'notes' => 'Chapter 3']]]], 'Suggested.',
+        ['calls' => [['update_task', ['task_id' => $task->id, 'notes' => '']]]], 'Suggested.',
+    ]);
+    $first = askAssistant('Note chapter 3')->json('messages.1.id');
+    $second = askAssistant('Clear the notes')->json('messages.1.id');
+
+    $this->postJson("/assistant/messages/{$first}/proposals/0/approve")->assertOk();
+    expect($task->fresh()->notes)->toBe('Chapter 3');
+
+    $this->postJson("/assistant/messages/{$second}/proposals/0/approve")->assertOk();
+    expect($task->fresh()->notes)->toBeNull();
+});
+
+it('can edit a task that is already done', function () {
+    $task = $this->user->tasks()->create(['title' => 'Old', 'priority' => 'normal']);
+    $task->forceFill(['completed_at' => now()])->save();
+    $id = proposeAndGetId('update_task', ['task_id' => $task->id, 'title' => 'Old, renamed']);
+
+    $this->postJson("/assistant/messages/{$id}/proposals/0/approve")->assertOk();
+
+    expect($task->fresh()->title)->toBe('Old, renamed');
+});
+
+it('rejects a bad task change and tells the model why', function (array $arguments) {
+    $task = $this->user->tasks()->create(['title' => 'X', 'priority' => 'normal']);
+    fakeOllama([['calls' => [['update_task', ['task_id' => $task->id, ...$arguments]]]], 'Sorry.']);
+
+    askAssistant('Change it')->assertJsonPath('messages.1.proposals', []);
+
+    expect(collect(ollamaRequests()[1]['messages'])->firstWhere('role', 'tool')['content'])->toContain('error');
+})->with([
+    'bad priority' => [['priority' => 'urgent']],
+    'time without a date' => [['due_time' => '10:00']],
+    'bad date' => [['due_date' => 'someday']],
+    'title too long' => [['title' => str_repeat('a', 256)]],
+]);
+
+it('deletes a task and its sessions once approved, and says so up front', function () {
+    $task = $this->user->tasks()->create(['title' => 'Essay', 'priority' => 'normal']);
+    plannedSession($this->user, $task, '2026-10-08 19:00:00');
+    plannedSession($this->user, $task, '2026-10-09 19:00:00');
+    $id = proposeAndGetId('delete_task', ['task_id' => $task->id]);
+
+    expect(lastProposal())->toMatchArray(['summary' => 'Delete task “Essay” and its 2 planned sessions', 'destructive' => true]);
+    expect(Task::count())->toBe(1);
+
+    $this->postJson("/assistant/messages/{$id}/proposals/0/approve")->assertOk()->assertJsonPath('message.proposals.0.result', 'Deleted the task “Essay”.');
+
+    expect(Task::count())->toBe(0)->and(CalendarSession::count())->toBe(0);
+});
+
+it('does not touch another user\'s task when asked to change or delete it', function (string $tool, array $extra) {
+    $theirs = User::factory()->create()->tasks()->create(['title' => 'Theirs', 'priority' => 'normal']);
+    fakeOllama([['calls' => [[$tool, ['task_id' => $theirs->id, ...$extra]]]], 'Could not.']);
+
+    askAssistant('Do it')->assertJsonPath('messages.1.proposals', []);
+
+    expect($theirs->fresh()->title)->toBe('Theirs');
+})->with([['update_task', ['title' => 'Mine now']], ['delete_task', []]]);
+
+it('fails an approved task change if the task is gone by then', function () {
+    $task = $this->user->tasks()->create(['title' => 'Essay', 'priority' => 'normal']);
+    $id = proposeAndGetId('update_task', ['task_id' => $task->id, 'title' => 'Renamed']);
+    $task->delete();
+
+    $this->postJson("/assistant/messages/{$id}/proposals/0/approve")->assertUnprocessable()->assertJsonPath('message', 'That task no longer exists.');
+});
+
+it('can suggest several changes in one reply, each approved on its own', function () {
+    $task = $this->user->tasks()->create(['title' => 'Essay', 'priority' => 'normal']);
+    fakeOllama([['calls' => [['update_task', ['task_id' => $task->id, 'priority' => 'high']], ['create_routine', ['title' => 'Write', 'days' => ['daily'], 'start_time' => '09:00', 'minutes' => 30]]]], 'Two suggestions.']);
+    $id = askAssistant('Prioritise the essay and set a daily writing slot')->assertJsonCount(2, 'messages.1.proposals')->json('messages.1.id');
+
+    $this->postJson("/assistant/messages/{$id}/proposals/1/approve")->assertOk();
+
+    expect(Routine::count())->toBe(1)->and($task->fresh()->priority)->toBe('normal');
+    $this->getJson('/assistant')->assertJsonPath('messages.1.proposals.0.status', 'pending')->assertJsonPath('messages.1.proposals.1.status', 'approved');
+});
+
+it('asks a reasoning model to think briefly, and leaves the setting out for other models', function () {
+    fakeOllama(['Ok.', 'Ok.']);
+    askAssistant('Hi');
+
+    config(['services.ollama.model' => 'qwen2.5:14b']);
+    askAssistant('Hi again');
+
+    expect(ollamaRequests()[0])->toMatchArray(['model' => 'gpt-oss:latest', 'think' => 'low', 'keep_alive' => '30m'])->and(ollamaRequests()[1])->not->toHaveKey('think');
 });
