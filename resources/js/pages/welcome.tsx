@@ -6,13 +6,14 @@ import ResponsibilityDialog from '../components/responsibility-dialog';
 import RoutineDialog from '../components/routine-dialog';
 import RoutineMoveDialog from '../components/routine-move-dialog';
 import RoutineOccurrenceDialog from '../components/routine-occurrence-dialog';
+import SchoolStrip from '../components/school-strip';
 import TasksCard from '../components/tasks/tasks-card';
 import WeeklyCalendar from '../../../resources/js/components/weekly-calendar';
 import ScheduleDialog from '../../../resources/js/components/schedule-dialog';
 import { addDays, dateLabel, localToISO, overlaps, timeLabel, zonedParts, type GoogleEvent, type PlannerRoutine, type PlannerSession, type PlannerTask, type RoutineOccurrence } from '../lib/planner';
 
 type Responsibility = { id: number; name: string; description: string | null; color: string | null };
-type Props = { name: string; email: string; responsibilities: Responsibility[]; tasks: PlannerTask[]; sessions: PlannerSession[]; routines: PlannerRoutine[]; routineSessions: RoutineOccurrence[]; routinesToday: RoutineOccurrence[]; google?: { connected: boolean; needsReconnect: boolean }; googleEvents?: GoogleEvent[]; weekStart: string; timezone: string };
+type Props = { name: string; email: string; responsibilities: Responsibility[]; tasks: PlannerTask[]; sessions: PlannerSession[]; routines: PlannerRoutine[]; routineSessions: RoutineOccurrence[]; routinesToday: RoutineOccurrence[]; school?: { connected: boolean; overdue: number; dueSoon: { id: number; name: string; course_name: string; due_at: string; url: string | null }[] } | null; google?: { connected: boolean; needsReconnect: boolean }; googleEvents?: GoogleEvent[]; weekStart: string; timezone: string };
 
 const clock24 = (value: number) => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
 
@@ -65,6 +66,7 @@ export default function Welcome({
                                     routineSessions = [],
                                     routinesToday = [],
                                     google,
+                                    school,
                                     googleEvents,
                                     weekStart,
                                     timezone = 'America/New_York',
@@ -195,6 +197,7 @@ export default function Welcome({
                 </select>
             </label>
         </div>
+        {school && <SchoolStrip school={school} timezone={timezone} />}
         <div className="grid items-start gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
             <TasksCard
                 tasks={tasks}

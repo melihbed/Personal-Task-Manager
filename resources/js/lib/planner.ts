@@ -1,6 +1,8 @@
 export type PlannerTask = {
     id: number; responsibility_id: number | null; title: string; notes: string | null; priority: string;
     estimate_minutes: number | null; due_at: string | null; due_has_time: boolean; completed_at: string | null; calendar_sessions_count: number;
+    /** Set when the task was made from a Canvas assignment. */
+    canvas_assignment?: { html_url: string | null; course: { name: string } } | null;
 };
 export type PlannerSession = {
     id: number; task_id: number; title: string; responsibility_name: string;

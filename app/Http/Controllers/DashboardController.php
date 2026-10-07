@@ -34,6 +34,7 @@ class DashboardController extends Controller
                     $responsibility->where('user_id', $user->id)->whereNull('archived_at');
                 });
             })
+            ->with('canvasAssignment:id,task_id,html_url,canvas_course_id', 'canvasAssignment.course:id,name')
             ->withCount('calendarSessions')->orderByDesc('created_at')->orderByDesc('id')
             ->get();
         $sessions = CalendarSession::where('user_id', $user->id) // finds the specific users sessions
@@ -65,6 +66,7 @@ class DashboardController extends Controller
             'googleEvents' => filled($user->googleAccount?->import_calendar_ids) && ! $user->googleAccount->needs_reconnect
                 ? Inertia::defer(fn () => app(GoogleCalendarEvents::class)->between($user, $start->utc(), $end->utc()))
                 : [],
+            'school' => $this->school($user),
             'routines' => $routines['routines'],
             'routineSessions' => $routines['week'],
             'routinesToday' => $routines['today'],
@@ -76,6 +78,30 @@ class DashboardController extends Controller
             'weekStart' => $start->format('Y-m-d'),
             'timezone' => $timezone,
         ]);
+    }
+
+    /**
+     * Canvas work due in the next two days, and how much is overdue, for the dashboard strip.
+     *
+     * @return array{connected: bool, overdue: int, dueSoon: list<array<string, mixed>>}|null
+     */
+    private function school(User $user): ?array
+    {
+        if ($user->canvasAccount === null || $user->canvasAccount->needs_reconnect) {
+            return null;
+        }
+
+        $open = $user->canvasAssignments()->open()->whereNotNull('due_at')
+            ->whereHas('course', fn ($course) => $course->where('tracked', true));
+
+        return [
+            'connected' => true,
+            'overdue' => (clone $open)->where('due_at', '<', now())->count(),
+            'dueSoon' => (clone $open)->whereBetween('due_at', [now(), now()->addHours(48)])
+                ->with('course:id,name')->orderBy('due_at')->limit(5)->get()
+                ->map(fn ($assignment) => ['id' => $assignment->id, 'name' => $assignment->name, 'course_name' => $assignment->course->name, 'due_at' => $assignment->due_at->utc()->toIso8601String(), 'url' => $assignment->html_url])
+                ->values()->all(),
+        ];
     }
 
     /**

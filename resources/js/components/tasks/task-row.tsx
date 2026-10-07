@@ -1,5 +1,6 @@
 import type { DragEvent } from 'react';
 import { formatLength } from '../../lib/routines';
+import { courseTitle } from '../../lib/school';
 import type { PlannerTask } from '../../lib/planner';
 import DuePill from '../due-pill';
 import Button from '../ui/button';
@@ -93,6 +94,9 @@ export default function TaskRow({ task, timezone, responsibility, leaving, fresh
                             {task.estimate_minutes && <span>{formatLength(task.estimate_minutes)}</span>}
                             {task.notes && <span title={task.notes}>≡ Notes</span>}
                             {task.calendar_sessions_count > 0 && <span>▦ {task.calendar_sessions_count} {task.calendar_sessions_count === 1 ? 'session' : 'sessions'}</span>}
+                            {task.canvas_assignment && (
+                                <span title="From Canvas">{courseTitle(task.canvas_assignment.course.name)}</span>
+                            )}
                             <span className="inline-flex items-center gap-1">
                                 <span aria-hidden="true" className="size-1.5 rounded-full" style={{ background: responsibility?.color ?? 'var(--pm-accent)' }} />
                                 {responsibility?.name ?? 'Inbox'}

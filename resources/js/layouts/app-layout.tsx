@@ -9,6 +9,7 @@ export default function AppLayout({ title, children, backHref }: Props) {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const onHome = url.split('?')[0] === '/';
     const onIntegrations = url.startsWith('/integrations');
+    const onSchool = url.startsWith('/school');
 
     useEffect(() => {
         if (!sidebarOpen) return;
@@ -45,6 +46,11 @@ export default function AppLayout({ title, children, backHref }: Props) {
                         }} className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${onHome ? 'bg-white shadow-sm' : 'hover:bg-white/60'}`}>
                             <span aria-hidden="true" className="h-2 w-2 rounded-full bg-[var(--pm-accent)]" />Dashboard
                         </Link>
+                        <Link href="/school" aria-current={onSchool ? 'page' : undefined} onClick={() => {
+                            if (window.innerWidth < 768) setSidebarOpen(false);
+                        }} className={`mt-1 flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${onSchool ? 'bg-white shadow-sm' : 'hover:bg-white/60'}`}>
+                            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-[var(--pm-blue)]" />School
+                        </Link>
                         <p className="mt-8 mb-3 px-4 text-xs font-medium tracking-wider text-[var(--pm-muted)] uppercase">Settings</p>
                         <Link href="/integrations" aria-current={onIntegrations ? 'page' : undefined} onClick={() => {
                             if (window.innerWidth < 768) setSidebarOpen(false);
@@ -52,7 +58,7 @@ export default function AppLayout({ title, children, backHref }: Props) {
                             <span aria-hidden="true" className="h-2 w-2 rounded-full bg-[var(--pm-blue)]" />Integrations
                         </Link>
                         <p className="mt-8 mb-3 px-4 text-xs font-medium tracking-wider text-[var(--pm-muted)] uppercase">Coming later</p>
-                        <ul className="space-y-1">{['Inbox', 'Calendar', 'Spiritual duties', 'School', 'Workouts', 'Watch later'].map(label => <li key={label} className="px-4 py-3 text-sm text-[var(--pm-muted)]">{label}</li>)}</ul>
+                        <ul className="space-y-1">{['Inbox', 'Calendar', 'Spiritual duties', 'Workouts', 'Watch later'].map(label => <li key={label} className="px-4 py-3 text-sm text-[var(--pm-muted)]">{label}</li>)}</ul>
                     </nav>
                     <div className="p-4"><button type="button" onClick={() => router.post('/logout')} className="pm-button pm-button--secondary w-full">Log out</button></div>
                 </aside>

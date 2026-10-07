@@ -14,6 +14,7 @@ use App\Http\Controllers\GoogleSyncController;
 use App\Http\Controllers\IntegrationsController;
 use App\Http\Controllers\RoutineController;
 use App\Http\Controllers\RoutineOccurrenceController;
+use App\Http\Controllers\SchoolController;
 use App\Http\Controllers\TaskController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -68,6 +69,8 @@ Route::middleware('auth')->group(function () {
     Route::patch('/integrations/canvas', [CanvasController::class, 'update'])->name('canvas.update');
     Route::delete('/integrations/canvas', [CanvasController::class, 'destroy'])->name('canvas.destroy');
     Route::post('/integrations/canvas/sync', [CanvasSyncController::class, 'store'])->name('canvas.sync.store');
+
+    Route::get('/school', [SchoolController::class, 'index'])->name('school.index');
 
     Route::post('/routines', [RoutineController::class, 'store'])->name('routines.store');
     Route::patch('/routines/{routine}', [RoutineController::class, 'update'])->name('routines.update');
