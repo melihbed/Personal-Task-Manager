@@ -46,6 +46,24 @@ export function zonedParts(value: Date, timezone: string) {
     return { date: `${part('year')}-${part('month')}-${part('day')}`, time: `${part('hour')}:${part('minute')}`, second: part('second') };
 }
 
+/** How far into the day it is in a timezone, in minutes (with seconds as a fraction), for placing the "now" line. */
+export function minutesSinceMidnight(value: Date, timezone: string): number {
+    const parts = zonedParts(value, timezone);
+    const [hours, minutes] = parts.time.split(':').map(Number);
+
+    return hours * 60 + minutes + Number(parts.second) / 60;
+}
+
+/**
+ * Where to scroll the day view to when it opens. On a week that contains today, a couple of hours above "now", so
+ * what is coming next is in view; otherwise 7 AM, the start of a typical day.
+ */
+export function calendarScrollTop(nowMinutes: number | null, hourHeight: number): number {
+    if (nowMinutes === null) return 7 * hourHeight;
+
+    return Math.max(0, (nowMinutes / 60 - 2.5) * hourHeight);
+}
+
 // Convert a wall-clock date/time in an IANA timezone to an explicit UTC instant.
 // Verify round-trip to reject nonexistent daylight-saving times.
 export function localToISO(date: string, time: string, timezone: string): string {

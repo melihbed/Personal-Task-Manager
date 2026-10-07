@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { dueDay, dueMinutes, dueState, formatDue } from '../lib/deadlines';
-import { addDays, dateLabel, dayLayout, overlaps, timeLabel, zonedParts, type GoogleEvent, type PlannerSession, type PlannerTask, type RoutineOccurrence } from '../lib/planner';
+import { addDays, calendarScrollTop, dateLabel, dayLayout, minutesSinceMidnight, overlaps, timeLabel, zonedParts, type GoogleEvent, type PlannerSession, type PlannerTask, type RoutineOccurrence } from '../lib/planner';
 
 type Props = {
     weekStart: string;
@@ -61,9 +61,12 @@ export default function WeeklyCalendar({
     onMoveSession,
     onMoveRoutine,
 }: Props) {
-    const today = zonedParts(new Date(), timezone).date;
+    const [now, setNow] = useState(() => new Date());
+    const today = zonedParts(now, timezone).date;
+    const nowMinutes = minutesSinceMidnight(now, timezone);
     const dates = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
-    const [selected, setSelected] = useState(today >= weekStart && today <= dates[6] ? today : weekStart);
+    const weekHasToday = today >= weekStart && today <= dates[6];
+    const [selected, setSelected] = useState(weekHasToday ? today : weekStart);
     const viewport = useRef<HTMLDivElement>(null);
     const [hover, setHover] = useState<{ date: string; minutes: number } | null>(null);
     const [draggingBlock, setDraggingBlock] = useState<{ block: Block; grabMinutes: number } | null>(null);
@@ -166,9 +169,24 @@ export default function WeeklyCalendar({
         if (!draggingTask && !draggingBlock) setHover(null);
     }, [draggingTask, draggingBlock]);
 
+    // Keep the "now" line current, and catch up when the tab is shown again after being in the background.
     useEffect(() => {
-        setSelected(today >= weekStart && today <= addDays(weekStart, 6) ? today : weekStart);
-        if (viewport.current) viewport.current.scrollTop = 7 * HOUR_HEIGHT;
+        const tick = () => setNow(new Date());
+        const timer = window.setInterval(tick, 30_000);
+
+        document.addEventListener('visibilitychange', tick);
+
+        return () => {
+            window.clearInterval(timer);
+            document.removeEventListener('visibilitychange', tick);
+        };
+    }, []);
+
+    useEffect(() => {
+        setSelected(weekHasToday ? today : weekStart);
+        if (viewport.current) viewport.current.scrollTop = calendarScrollTop(weekHasToday ? nowMinutes : null, HOUR_HEIGHT);
+        // Scrolls when the week or the day changes, not every minute as the line moves.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [weekStart, today]);
 
     const previewMinutes = draggingBlock ? lengthInMinutes(draggingBlock.block) : (draggingTask?.estimate_minutes ?? 30);
@@ -244,10 +262,16 @@ export default function WeeklyCalendar({
                 <div className="relative flex" style={{ height: 24 * HOUR_HEIGHT }}>
                     <div className="relative w-14 shrink-0 bg-white">
                         {Array.from({ length: 24 }, (_, hour) => (
-                            <span key={hour} className="absolute right-2 text-[10px] text-[var(--pm-muted)]" style={{ top: hour * HOUR_HEIGHT + 3 }}>
-                                {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
-                            </span>
+                            // The hour label that the current-time label would cover is left out.
+                            weekHasToday && Math.abs(hour * 60 - nowMinutes) < 14 ? null : (
+                                <span key={hour} className="absolute right-2 text-[10px] text-[var(--pm-muted)]" style={{ top: hour * HOUR_HEIGHT + 3 }}>
+                                    {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
+                                </span>
+                            )
                         ))}
+                        {weekHasToday && (
+                            <span className="pm-now-label" style={{ top: nowMinutes / 60 * HOUR_HEIGHT }} title="Current time">{timeLabel(now.toISOString(), timezone)}</span>
+                        )}
                     </div>
 
                     {dates.map(date => (
@@ -338,6 +362,8 @@ export default function WeeklyCalendar({
                                     <span className="pm-deadline__label">{task.title}</span>
                                 </button>
                             ))}
+
+                            {date === today && <div className="pm-now" aria-hidden="true" style={{ top: nowMinutes / 60 * HOUR_HEIGHT }} />}
 
                             {(draggingTask || draggingBlock) && hover?.date === date && (
                                 <div className="pm-drop-preview" style={{ top: hover.minutes / 60 * HOUR_HEIGHT, height: Math.max(18, previewMinutes / 60 * HOUR_HEIGHT - 2) }}>

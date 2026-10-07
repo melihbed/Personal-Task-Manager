@@ -14,6 +14,7 @@
     --pm-border: #d6d9de;
     --pm-accent: #e64b27;
     --pm-blue: #79a7cf;
+    --pm-now: #2563eb;
     --pm-overdue: #b91c1c;
     --pm-overdue-soft: #fef2f2;
     --pm-today: #b45309;
@@ -119,6 +120,11 @@ li:hover .pm-grip, li:focus-within .pm-grip, .pm-grip:focus-visible { opacity: 1
 .pm-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .pm-badge--ok { background: #ecfdf3; color: #15803d; }
 .pm-badge--warn { background: var(--pm-today-soft); color: var(--pm-today); }
+
+/* The current time: a line across today's column with a dot, and the time in the gutter. Blue, so it is not mistaken for a red deadline. */
+.pm-now { position: absolute; left: 0; right: 0; z-index: 12; height: 0; border-top: 2px solid var(--pm-now); pointer-events: none; }
+.pm-now::before { content: ''; position: absolute; left: -5px; top: -6px; width: 10px; height: 10px; border-radius: 50%; background: var(--pm-now); }
+.pm-now-label { position: absolute; right: 3px; z-index: 12; padding: 1px 4px; border-radius: 5px; background: var(--pm-now); color: white; font-size: 9px; font-weight: 600; line-height: 14px; letter-spacing: -0.01em; white-space: nowrap; transform: translateY(-50%); pointer-events: none; }
 
 .pm-button-group { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 /* Specialized controls share states while retaining the shape their function needs. */
