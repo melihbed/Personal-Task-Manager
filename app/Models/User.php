@@ -88,4 +88,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(CanvasAssignment::class);
     }
+
+    public function assistantMessages(): HasMany
+    {
+        return $this->hasMany(AssistantMessage::class);
+    }
 }

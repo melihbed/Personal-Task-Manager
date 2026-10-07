@@ -34,6 +34,13 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI', rtrim((string) env('APP_URL', 'http://localhost'), '/').'/integrations/google/callback'),
     ],
 
+    // A local Ollama server. The assistant runs entirely on this machine.
+    'ollama' => [
+        'url' => rtrim((string) env('OLLAMA_URL', 'http://localhost:11434'), '/'),
+        'model' => env('OLLAMA_MODEL', 'qwen2.5:7b'),
+        'timeout' => (int) env('OLLAMA_TIMEOUT', 120),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

@@ -1,5 +1,6 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState, type ReactNode } from 'react';
+import AssistantPanel from '../components/assistant/assistant-panel';
 import { ToastProvider } from '../components/ui/toast';
 
 type Props = { title: string; children: ReactNode; backHref?: string };
@@ -7,6 +8,7 @@ type Props = { title: string; children: ReactNode; backHref?: string };
 export default function AppLayout({ title, children, backHref }: Props) {
     const { url } = usePage();
     const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [assistantOpen, setAssistantOpen] = useState(false);
     const onHome = url.split('?')[0] === '/';
     const onIntegrations = url.startsWith('/integrations');
     const onSchool = url.startsWith('/school');
@@ -102,11 +104,22 @@ export default function AppLayout({ title, children, backHref }: Props) {
                             )}
                             <h1 className="text-xl font-medium break-words">{title}</h1>
                         </div>
+                        <button
+                            type="button"
+                            onClick={() => setAssistantOpen(open => !open)}
+                            aria-expanded={assistantOpen}
+                            aria-controls="assistant-panel"
+                            className="pm-button pm-button--secondary ml-auto"
+                        >
+                            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3 2.2 5.3 5.3 2.2-5.3 2.2L12 18l-2.2-5.3-5.3-2.2 5.3-2.2zM18.5 17v4M16.5 19h4" /></svg>
+                            Assistant
+                        </button>
                     </header>
                     <main id="main-content" className="px-6 pb-10 lg:px-10"><div className="mx-auto max-w-[1600px]">{children}</div></main>
                 </div>
             </div>
         </div>
+        <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
         </ToastProvider>
     );
 }

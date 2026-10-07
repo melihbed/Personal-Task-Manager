@@ -16,6 +16,7 @@ use Tests\TestCase;
 
 require_once __DIR__.'/Support/google.php';
 require_once __DIR__.'/Support/canvas.php';
+require_once __DIR__.'/Support/assistant.php';
 
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)

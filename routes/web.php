@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AssistantController;
 use App\Http\Controllers\CalendarSessionController;
 use App\Http\Controllers\CanvasController;
 use App\Http\Controllers\CanvasSyncController;
@@ -69,6 +70,12 @@ Route::middleware('auth')->group(function () {
     Route::patch('/integrations/canvas', [CanvasController::class, 'update'])->name('canvas.update');
     Route::delete('/integrations/canvas', [CanvasController::class, 'destroy'])->name('canvas.destroy');
     Route::post('/integrations/canvas/sync', [CanvasSyncController::class, 'store'])->name('canvas.sync.store');
+
+    Route::get('/assistant', [AssistantController::class, 'index'])->name('assistant.index');
+    Route::post('/assistant', [AssistantController::class, 'store'])->name('assistant.store');
+    Route::delete('/assistant', [AssistantController::class, 'destroy'])->name('assistant.destroy');
+    Route::post('/assistant/messages/{message}/proposals/{index}/approve', [AssistantController::class, 'approve'])->whereNumber('index')->name('assistant.approve');
+    Route::post('/assistant/messages/{message}/proposals/{index}/dismiss', [AssistantController::class, 'dismiss'])->whereNumber('index')->name('assistant.dismiss');
 
     Route::get('/school', [SchoolController::class, 'index'])->name('school.index');
 
