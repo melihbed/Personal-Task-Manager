@@ -47,25 +47,6 @@ it('leaves out courses that are not tracked and other people\'s work', function 
         ->assertInertia(fn (Assert $page) => $page->where('assignments', [])->where('courses.0.name', 'Data Structures'));
 });
 
-it('puts the work due in the next two days and the overdue count on the dashboard', function () {
-    $user = canvasUser();
-    $course = $user->canvasCourses()->firstOrFail();
-    CanvasAssignment::factory()->for($course, 'course')->create(['name' => 'Tomorrow', 'due_at' => now()->addDay()]);
-    CanvasAssignment::factory()->for($course, 'course')->create(['name' => 'Next week', 'due_at' => now()->addDays(6)]);
-    CanvasAssignment::factory()->for($course, 'course')->create(['name' => 'Missed', 'due_at' => now()->subDay()]);
-    CanvasAssignment::factory()->for($course, 'course')->create(['name' => 'Done', 'due_at' => now()->addHours(5), 'submitted' => true]);
-
-    $this->actingAs($user)->get('/')
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('school.overdue', 1)
-            ->where('school.dueSoon.*.name', ['Tomorrow']));
-});
-
-it('leaves the school strip out when Canvas is not connected', function () {
-    $this->actingAs(User::factory()->create())->get('/')
-        ->assertInertia(fn (Assert $page) => $page->where('school', null));
-});
-
 it('tells the dashboard which course and link a Canvas task came from', function () {
     fakeCanvas([canvasCourse()], [101 => [canvasAssignment()]]);
     $user = canvasUser();
@@ -77,7 +58,7 @@ it('tells the dashboard which course and link a Canvas task came from', function
             ->where('tasks.0.canvas_assignment.html_url', 'https://njit.instructure.com/courses/101/assignments/5001'));
 });
 
-it('counts work as done when its task was completed here, and keeps it out of the dashboard strip', function () {
+it('counts work as done when its task was completed here', function () {
     $user = canvasUser();
     $course = $user->canvasCourses()->firstOrFail();
     $task = $user->tasks()->create(['title' => 'Quiz prep', 'priority' => 'normal']);
@@ -86,7 +67,4 @@ it('counts work as done when its task was completed here, and keeps it out of th
 
     $this->actingAs($user)->get('/school')
         ->assertInertia(fn (Assert $page) => $page->where('assignments.0.done', true)->where('assignments.0.submitted', false));
-
-    $this->actingAs($user)->get('/')
-        ->assertInertia(fn (Assert $page) => $page->where('school.dueSoon', []));
 });

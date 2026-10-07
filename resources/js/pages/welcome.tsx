@@ -6,14 +6,14 @@ import ResponsibilityDialog from '../components/responsibility-dialog';
 import RoutineDialog from '../components/routine-dialog';
 import RoutineMoveDialog from '../components/routine-move-dialog';
 import RoutineOccurrenceDialog from '../components/routine-occurrence-dialog';
-import SchoolStrip from '../components/school-strip';
+import TodayPanel from '../components/today/today-panel';
 import TasksCard from '../components/tasks/tasks-card';
 import WeeklyCalendar from '../../../resources/js/components/weekly-calendar';
 import ScheduleDialog from '../../../resources/js/components/schedule-dialog';
 import { addDays, dateLabel, localToISO, overlaps, timeLabel, zonedParts, type GoogleEvent, type PlannerRoutine, type PlannerSession, type PlannerTask, type RoutineOccurrence } from '../lib/planner';
 
 type Responsibility = { id: number; name: string; description: string | null; color: string | null };
-type Props = { name: string; email: string; responsibilities: Responsibility[]; tasks: PlannerTask[]; sessions: PlannerSession[]; routines: PlannerRoutine[]; routineSessions: RoutineOccurrence[]; routinesToday: RoutineOccurrence[]; school?: { connected: boolean; overdue: number; dueSoon: { id: number; name: string; course_name: string; due_at: string; url: string | null }[] } | null; google?: { connected: boolean; needsReconnect: boolean }; googleEvents?: GoogleEvent[]; weekStart: string; timezone: string };
+type Props = { name: string; email: string; responsibilities: Responsibility[]; tasks: PlannerTask[]; sessions: PlannerSession[]; routines: PlannerRoutine[]; routineSessions: RoutineOccurrence[]; routinesToday: RoutineOccurrence[]; todaySessions?: PlannerSession[]; googleToday?: GoogleEvent[] | null; google?: { connected: boolean; needsReconnect: boolean }; googleEvents?: GoogleEvent[]; weekStart: string; timezone: string };
 
 const clock24 = (value: number) => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
 
@@ -66,7 +66,8 @@ export default function Welcome({
                                     routineSessions = [],
                                     routinesToday = [],
                                     google,
-                                    school,
+                                    todaySessions = [],
+                                    googleToday,
                                     googleEvents,
                                     weekStart,
                                     timezone = 'America/New_York',
@@ -197,22 +198,35 @@ export default function Welcome({
                 </select>
             </label>
         </div>
-        {school && <SchoolStrip school={school} timezone={timezone} />}
         <div className="grid items-start gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
-            <TasksCard
-                tasks={tasks}
-                responsibilities={responsibilities}
-                routines={routines}
-                routinesToday={routinesToday}
-                timezone={timezone}
-                draggingTaskId={draggingTask?.id ?? null}
-                onSchedule={setSelectedTask}
-                onDragTask={setDraggingTask}
-                onNewRoutine={() => setRoutineDialog({ id: null })}
-                onNewResponsibility={() => setResponsibilityDialogOpen(true)}
-                onEditRoutine={routine => setRoutineDialog({ id: routine.id })}
-                onSelectOccurrence={setSelectedOccurrence}
-            />
+            <div className="min-w-0 space-y-6">
+                <TodayPanel
+                    tasks={tasks}
+                    responsibilities={responsibilities}
+                    sessions={todaySessions}
+                    routines={routinesToday}
+                    events={google?.connected ? (googleToday === null ? googleEvents : googleToday) : []}
+                    timezone={timezone}
+                    onPlanTask={setSelectedTask}
+                    onSelectSession={setSelectedSession}
+                    onSelectOccurrence={setSelectedOccurrence}
+                    onSelectEvent={setSelectedGoogleEvent}
+                />
+                <TasksCard
+                    tasks={tasks}
+                    responsibilities={responsibilities}
+                    routines={routines}
+                    routinesToday={routinesToday}
+                    timezone={timezone}
+                    draggingTaskId={draggingTask?.id ?? null}
+                    onSchedule={setSelectedTask}
+                    onDragTask={setDraggingTask}
+                    onNewRoutine={() => setRoutineDialog({ id: null })}
+                    onNewResponsibility={() => setResponsibilityDialogOpen(true)}
+                    onEditRoutine={routine => setRoutineDialog({ id: routine.id })}
+                    onSelectOccurrence={setSelectedOccurrence}
+                />
+            </div>
             <section className="min-w-0" aria-labelledby="week-title">{google?.needsReconnect && <p role="alert" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">Google Calendar needs to be connected again, so syncing is paused. <Link href="/integrations/google" className="pm-link">Fix it</Link></p>}<div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 id="week-title" className="text-lg font-medium">{dateLabel(weekStart, { month: 'short', day: 'numeric' })} – {dateLabel(weekEnd, { month: 'short', day: 'numeric', year: 'numeric' })}</h2><p className="mt-1 text-xs text-[var(--pm-muted)]">Monday–Sunday · Click a session to manage it</p></div><div className="pm-button-group"><button type="button" aria-label="Previous week" onClick={() => navigate(addDays(weekStart, -7))} className="pm-button pm-button--secondary pm-button--icon">‹</button><button type="button" onClick={() => navigate(null)} className="pm-button pm-button--secondary">Today</button><button type="button" aria-label="Next week" onClick={() => navigate(addDays(weekStart, 7))} className="pm-button pm-button--secondary pm-button--icon">›</button></div></div><WeeklyCalendar weekStart={weekStart} timezone={timezone} sessions={sessions} onSelect={setSelectedSession} deadlines={deadlines} onSelectDeadline={setSelectedTask} routineOccurrences={routineSessions} onSelectRoutine={setSelectedOccurrence} googleEvents={googleEvents ?? []} onSelectGoogle={setSelectedGoogleEvent} googleLoading={!!google?.connected && googleEvents === undefined} draggingTask={draggingTask} onDropTask={planByDrop} onMoveSession={moveSession} onMoveRoutine={moveRoutine} />{sessions.length === 0 && <p className="mt-3 text-sm text-[var(--pm-muted)]">Your week is open. Drag a task here, or choose Plan beside it, to reserve time.</p>}</section>
         </div>
         {routineDialog && (routineDialog.id === null || editingRoutine) && (

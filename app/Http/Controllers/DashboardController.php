@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\GoogleCalendar\GoogleCalendarEvents;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -37,23 +38,12 @@ class DashboardController extends Controller
             ->with('canvasAssignment:id,task_id,html_url,canvas_course_id', 'canvasAssignment.course:id,name')
             ->withCount('calendarSessions')->orderByDesc('created_at')->orderByDesc('id')
             ->get();
-        $sessions = CalendarSession::where('user_id', $user->id) // finds the specific users sessions
-            ->where('starts_at', '<', $end->utc())->where('ends_at', '>', $start->utc()) // The session starts before the week ends.
-                                                                                        // The session ends after the week starts.
-            ->whereHas('task', fn ($query) => $query->where('user_id', $user->id))      // Check that its task belongs to this user too
-            ->with(['task:id,title,responsibility_id,completed_at', 'task.responsibility:id,name,color'])
-            ->orderBy('starts_at') // sort earliest first
-            ->get() // execute the query
-            ->map(fn ($session) => [ // map-> transform each result into an array for react
-                'id' => $session->id,
-                'task_id' => $session->task_id,
-                'title' => $session->task->title,
-                'responsibility_name' => $session->task->responsibility?->name ?? 'Inbox',
-                'color' => $session->task->responsibility?->color,
-                'completed' => $session->task->completed_at !== null,
-                'starts_at' => $session->starts_at->utc()->toIso8601String(),
-                'ends_at' => $session->ends_at->utc()->toIso8601String(),
-            ]);
+        $sessions = $this->sessions($user, $start, $end);
+
+        // The Today panel always shows the real today, whichever week the calendar is on.
+        $todayStart = CarbonImmutable::now($timezone)->startOfDay();
+        $todayEnd = $todayStart->addDay();
+        $todaySessions = $this->sessions($user, $todayStart, $todayEnd);
 
         $routines = $this->routines($user, $start, $end, $timezone);
 
@@ -66,7 +56,12 @@ class DashboardController extends Controller
             'googleEvents' => filled($user->googleAccount?->import_calendar_ids) && ! $user->googleAccount->needs_reconnect
                 ? Inertia::defer(fn () => app(GoogleCalendarEvents::class)->between($user, $start->utc(), $end->utc()))
                 : [],
-            'school' => $this->school($user),
+            // Today's Google events. On the current week the calendar's own events already cover today, so this is null.
+            'googleToday' => match (true) {
+                blank($user->googleAccount?->import_calendar_ids) || $user->googleAccount->needs_reconnect => [],
+                $todayStart >= $start && $todayStart < $end => null,
+                default => Inertia::defer(fn () => app(GoogleCalendarEvents::class)->between($user, $todayStart->utc(), $todayEnd->utc())),
+            },
             'routines' => $routines['routines'],
             'routineSessions' => $routines['week'],
             'routinesToday' => $routines['today'],
@@ -75,33 +70,35 @@ class DashboardController extends Controller
             'responsibilities' => $responsibilities,
             'tasks' => $tasks,
             'sessions' => $sessions,
+            'todaySessions' => $todaySessions->values()->all(),
             'weekStart' => $start->format('Y-m-d'),
             'timezone' => $timezone,
         ]);
     }
 
     /**
-     * Canvas work due in the next two days, and how much is overdue, for the dashboard strip.
+     * The user's work sessions that overlap a window, earliest first.
      *
-     * @return array{connected: bool, overdue: int, dueSoon: list<array<string, mixed>>}|null
+     * @return Collection<int, array<string, mixed>>
      */
-    private function school(User $user): ?array
+    private function sessions(User $user, CarbonImmutable $from, CarbonImmutable $to)
     {
-        if ($user->canvasAccount === null || $user->canvasAccount->needs_reconnect) {
-            return null;
-        }
-
-        $open = $user->canvasAssignments()->open()->whereNotNull('due_at')
-            ->whereHas('course', fn ($course) => $course->where('tracked', true));
-
-        return [
-            'connected' => true,
-            'overdue' => (clone $open)->where('due_at', '<', now())->count(),
-            'dueSoon' => (clone $open)->whereBetween('due_at', [now(), now()->addHours(48)])
-                ->with('course:id,name')->orderBy('due_at')->limit(5)->get()
-                ->map(fn ($assignment) => ['id' => $assignment->id, 'name' => $assignment->name, 'course_name' => $assignment->course->name, 'due_at' => $assignment->due_at->utc()->toIso8601String(), 'url' => $assignment->html_url])
-                ->values()->all(),
-        ];
+        return CalendarSession::where('user_id', $user->id)
+            ->where('starts_at', '<', $to->utc())->where('ends_at', '>', $from->utc())
+            ->whereHas('task', fn ($query) => $query->where('user_id', $user->id))
+            ->with(['task:id,title,responsibility_id,completed_at', 'task.responsibility:id,name,color'])
+            ->orderBy('starts_at')
+            ->get()
+            ->map(fn ($session) => [
+                'id' => $session->id,
+                'task_id' => $session->task_id,
+                'title' => $session->task->title,
+                'responsibility_name' => $session->task->responsibility?->name ?? 'Inbox',
+                'color' => $session->task->responsibility?->color,
+                'completed' => $session->task->completed_at !== null,
+                'starts_at' => $session->starts_at->utc()->toIso8601String(),
+                'ends_at' => $session->ends_at->utc()->toIso8601String(),
+            ]);
     }
 
     /**
