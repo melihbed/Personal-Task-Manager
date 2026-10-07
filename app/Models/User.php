@@ -103,4 +103,9 @@ class User extends Authenticatable
     {
         return $this->hasOne(PomodoroSetting::class);
     }
+
+    public function assistantActions(): HasMany
+    {
+        return $this->hasMany(AssistantAction::class);
+    }
 }

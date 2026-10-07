@@ -1,6 +1,6 @@
 import { router } from '@inertiajs/react';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { AssistantError, boldPieces, clearChat, decide, loadMessages, sendMessage, starterQuestions, type AssistantMessage } from '../../lib/assistant';
+import { AssistantError, boldPieces, clearChat, decide, describeChange, loadActions, loadMessages, sendMessage, starterQuestions, type Action, type AssistantMessage } from '../../lib/assistant';
 import { useCompanion } from '../companion/companion-context';
 import Fox from '../companion/fox';
 import { useFoxMood } from '../companion/use-fox-mood';
@@ -13,7 +13,7 @@ function Text({ content }: { content: string }) {
     return <>{boldPieces(content).map((piece, index) => piece.bold ? <strong key={index}>{piece.text}</strong> : <span key={index}>{piece.text}</span>)}</>;
 }
 
-function Thinking() {
+function Thinking({ status }: { status: string }) {
     const [slow, setSlow] = useState(false);
 
     // A model that has gone to sleep takes a while to wake, so say so instead of leaving the dots spinning.
@@ -28,8 +28,54 @@ function Thinking() {
             <div className="flex w-fit items-center gap-1.5 rounded-2xl bg-[var(--pm-background)] px-4 py-3">
                 {[0, 150, 300].map(delay => <span key={delay} className="size-1.5 animate-pulse rounded-full bg-[var(--pm-muted)]" style={{ animationDelay: `${delay}ms` }} />)}
             </div>
-            {slow && <p className="mt-2 text-xs text-[var(--pm-muted)]">Still working. The first answer after a break can take up to a minute while the model wakes up.</p>}
+            {status !== '' && <p className="mt-2 text-xs text-[var(--pm-muted)]">{status}</p>}
+            {slow && <p className="mt-1 text-xs text-[var(--pm-muted)]">Still working. The first answer after a break can take up to a minute while the model wakes up.</p>}
         </div>
+    );
+}
+
+const statusStyle = { applied: 'pm-badge pm-badge--ok', failed: 'pm-badge pm-badge--warn', dismissed: 'pm-badge' } as const;
+const statusLabel = { applied: 'Applied', failed: 'Could not apply', dismissed: 'Turned down' } as const;
+
+/** What the assistant has done, newest first, with what changed from and to. */
+function ActivityList({ actions, failed }: { actions: Action[] | null; failed: boolean }) {
+    const [openId, setOpenId] = useState<number | null>(null);
+
+    if (failed) return <p role="alert" className="text-sm text-red-700">Could not load the activity.</p>;
+    if (actions === null) return <div role="status" aria-label="Loading the activity" className="h-16 animate-pulse rounded-2xl bg-[var(--pm-background)]" />;
+
+    if (actions.length === 0) {
+        return (
+            <div>
+                <p className="text-sm font-medium">Nothing yet</p>
+                <p className="mt-1 text-xs text-[var(--pm-muted)]">Every change you approve, and every suggestion you turn down, is recorded here with what it changed.</p>
+            </div>
+        );
+    }
+
+    return (
+        <ul className="divide-y divide-[var(--pm-border)]">
+            {actions.map(action => {
+                const open = openId === action.id;
+                const detail = action.status === 'failed' ? [action.result ?? 'It could not be applied.'] : action.changes.map(describeChange);
+
+                return (
+                    <li key={action.id} className="py-3 first:pt-0 last:pb-0">
+                        <div className="flex items-start justify-between gap-3">
+                            <p className="min-w-0 text-sm leading-5 break-words">{action.summary}</p>
+                            <span className={`${statusStyle[action.status]} shrink-0`}>{statusLabel[action.status]}</span>
+                        </div>
+                        <div className="mt-1.5 flex items-center justify-between gap-3 text-[11px] text-[var(--pm-muted)]">
+                            <time dateTime={action.at}>{new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(action.at))}</time>
+                            {detail.length > 0 && (
+                                <button type="button" aria-expanded={open} onClick={() => setOpenId(open ? null : action.id)} className="cursor-pointer rounded-md px-1.5 py-0.5 hover:bg-[var(--pm-background)]">{open ? 'Hide details' : 'Details'}</button>
+                            )}
+                        </div>
+                        {open && <ul className="mt-2 space-y-1 rounded-xl bg-[var(--pm-background)] px-3 py-2.5 text-xs">{detail.map((line, index) => <li key={index} className="break-words">{line}</li>)}</ul>}
+                    </li>
+                );
+            })}
+        </ul>
     );
 }
 
@@ -42,6 +88,11 @@ export default function AssistantPanel({ open, onClose }: Props) {
     const [messages, setMessages] = useState<AssistantMessage[] | null>(null);
     const [draft, setDraft] = useState('');
     const [sending, setSending] = useState(false);
+    const [streamText, setStreamText] = useState('');
+    const [status, setStatus] = useState('');
+    const [view, setView] = useState<'chat' | 'activity'>('chat');
+    const [actions, setActions] = useState<Action[] | null>(null);
+    const [actionsFailed, setActionsFailed] = useState(false);
     const [error, setError] = useState('');
     const [deciding, setDeciding] = useState<string | null>(null);
     const [confirmNew, setConfirmNew] = useState(false);
@@ -69,7 +120,15 @@ export default function AssistantPanel({ open, onClose }: Props) {
         loadMessages().then(setMessages).catch((problem: Error) => { setMessages([]); setError(problem.message); });
     }, [open, messages]);
 
-    useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [messages, sending]);
+    useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [messages, sending, streamText, status]);
+
+    // The record is read fresh each time it is opened, so it is never out of date.
+    useEffect(() => {
+        if (!open || view !== 'activity') return;
+
+        setActionsFailed(false);
+        loadActions().then(setActions).catch(() => setActionsFailed(true));
+    }, [open, view]);
 
     // The fox writes in its notebook while an answer is on the way.
     useEffect(() => { setThinking(sending); return () => setThinking(false); }, [sending, setThinking]);
@@ -82,13 +141,19 @@ export default function AssistantPanel({ open, onClose }: Props) {
         setSending(true);
         setError('');
         setDraft('');
+        setStreamText('');
+        setStatus('');
 
         const pending: AssistantMessage = { id: -Date.now(), role: 'user', content, proposals: [] };
 
         setMessages(current => [...(current ?? []), pending]);
 
         try {
-            const reply = await sendMessage(content, timezone);
+            const reply = await sendMessage(content, timezone, (event) => {
+                if (event.type === 'delta') setStreamText(current => current + event.text);
+                else if (event.type === 'reset') setStreamText('');
+                else if (event.type === 'status') setStatus(event.text);
+            });
 
             setMessages(current => [...(current ?? []).filter(message => message.id !== pending.id), ...reply]);
         } catch (problem) {
@@ -97,6 +162,8 @@ export default function AssistantPanel({ open, onClose }: Props) {
             setError(problem instanceof AssistantError ? problem.message : 'Something went wrong. Please try again.');
         } finally {
             setSending(false);
+            setStreamText('');
+            setStatus('');
             input.current?.focus();
         }
     }
@@ -170,7 +237,28 @@ export default function AssistantPanel({ open, onClose }: Props) {
                 </div>
             </div>
 
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4" aria-live="polite">
+            <div className="px-4 pt-3">
+                <div
+                    role="tablist"
+                    aria-label="Chat or activity"
+                    className="pm-tabs"
+                    onKeyDown={(event) => { if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') setView(view === 'chat' ? 'activity' : 'chat'); }}
+                >
+                    {(['chat', 'activity'] as const).map(name => (
+                        <button key={name} type="button" role="tab" id={`assistant-tab-${name}`} aria-selected={view === name} aria-controls={`assistant-view-${name}`} tabIndex={view === name ? 0 : -1} onClick={() => setView(name)} className="pm-tab">
+                            {name === 'chat' ? 'Chat' : 'Activity'}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {view === 'activity' && (
+                <div role="tabpanel" id="assistant-view-activity" aria-labelledby="assistant-tab-activity" className="pm-tab-panel min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                    <ActivityList actions={actions} failed={actionsFailed} />
+                </div>
+            )}
+
+            <div role="tabpanel" id="assistant-view-chat" aria-labelledby="assistant-tab-chat" hidden={view !== 'chat'} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4" aria-live="polite">
                 {messages === null && <div role="status" aria-label="Loading the conversation" className="h-12 animate-pulse rounded-2xl bg-[var(--pm-background)]" />}
 
                 {empty && !sending && (
@@ -204,13 +292,16 @@ export default function AssistantPanel({ open, onClose }: Props) {
                     </div>
                 ))}
 
-                {sending && <Thinking />}
+                {sending && streamText !== '' && (
+                    <p className="text-sm leading-6 break-words whitespace-pre-wrap"><Text content={streamText} /><span aria-hidden="true" className="ml-0.5 inline-block h-4 w-0.5 translate-y-0.5 animate-pulse bg-[var(--pm-text)]" /></p>
+                )}
+                {sending && streamText === '' && <Thinking status={status} />}
                 <div ref={end} />
             </div>
 
-            {error && <p role="alert" className="mx-5 mb-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-950">{error}</p>}
+            {view === 'chat' && error && <p role="alert" className="mx-5 mb-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-950">{error}</p>}
 
-            <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(draft); }} className="border-t border-[var(--pm-border)] p-4">
+            <form hidden={view !== 'chat'} onSubmit={(event: FormEvent) => { event.preventDefault(); void send(draft); }} className="border-t border-[var(--pm-border)] p-4">
                 <label htmlFor="assistant-input" className="sr-only">Message the assistant</label>
                 <div className="flex items-end gap-2">
                     <textarea

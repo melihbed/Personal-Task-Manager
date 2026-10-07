@@ -1,7 +1,7 @@
 /** An error from one of the app's JSON endpoints, with a message that is safe to show. */
 export class ApiError extends Error {}
 
-function csrfToken(): string {
+export function csrfToken(): string {
     const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/);
 
     return match ? decodeURIComponent(match[1]) : '';

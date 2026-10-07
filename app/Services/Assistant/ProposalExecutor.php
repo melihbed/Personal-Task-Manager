@@ -2,6 +2,8 @@
 
 namespace App\Services\Assistant;
 
+use App\Models\AssistantAction;
+use App\Models\AssistantMessage;
 use App\Models\CalendarSession;
 use App\Models\Routine;
 use App\Models\Task;
@@ -11,35 +13,51 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Carries out a proposal the user approved. Everything is checked again, because the planner may have changed
- * since the assistant suggested it.
+ * since the assistant suggested it. What happened, or why it could not, is written to the action log.
  */
 class ProposalExecutor
 {
+    public function __construct(private readonly ActionLog $log) {}
+
     /**
      * @param  array<string, mixed>  $proposal
      * @return string what was done, for the user
+     *
+     * @throws ProposalFailed
      */
-    public function execute(User $user, array $proposal): string
+    public function execute(User $user, array $proposal, ?AssistantMessage $message = null): string
     {
         $arguments = $proposal['args'] ?? [];
+        $timezone = (string) ($proposal['timezone'] ?? 'UTC');
 
-        return match ($proposal['type'] ?? '') {
-            'create_task' => $this->createTask($user, $arguments, (string) ($proposal['timezone'] ?? 'UTC')),
-            'plan_session' => $this->planSession($user, $arguments),
-            'complete_task' => $this->completeTask($user, $arguments),
-            'update_task' => $this->updateTask($user, $arguments, (string) ($proposal['timezone'] ?? 'UTC')),
-            'delete_task' => $this->deleteTask($user, $arguments),
-            'create_routine' => $this->createRoutine($user, $arguments, (string) ($proposal['timezone'] ?? 'UTC')),
-            'update_routine' => $this->updateRoutine($user, $arguments),
-            'delete_routine' => $this->deleteRoutine($user, $arguments),
-            default => throw new ProposalFailed('This kind of change is not supported.'),
-        };
+        try {
+            $outcome = match ($proposal['type'] ?? '') {
+                'create_task' => $this->createTask($user, $arguments, $timezone),
+                'plan_session' => $this->planSession($user, $arguments, $timezone),
+                'complete_task' => $this->completeTask($user, $arguments, $timezone),
+                'update_task' => $this->updateTask($user, $arguments, $timezone),
+                'delete_task' => $this->deleteTask($user, $arguments, $timezone),
+                'create_routine' => $this->createRoutine($user, $arguments, $timezone),
+                'update_routine' => $this->updateRoutine($user, $arguments),
+                'delete_routine' => $this->deleteRoutine($user, $arguments),
+                default => throw new ProposalFailed('This kind of change is not supported.'),
+            };
+        } catch (ProposalFailed $exception) {
+            $this->log->record($user, $message, $proposal, AssistantAction::FAILED, $exception->getMessage());
+
+            throw $exception;
+        }
+
+        $this->log->record($user, $message, $proposal, AssistantAction::APPLIED, $outcome['result'], $outcome['subject']);
+
+        return $outcome['result'];
     }
 
     /**
      * @param  array<string, mixed>  $arguments
+     * @return array{result: string, subject: array<string, mixed>}
      */
-    private function createTask(User $user, array $arguments, string $timezone): string
+    private function createTask(User $user, array $arguments, string $timezone): array
     {
         $task = new Task(['title' => $arguments['title'], 'priority' => $arguments['priority'] ?? 'normal', 'due_has_time' => true]);
 
@@ -56,19 +74,21 @@ class ProposalExecutor
         $task->user()->associate($user);
         $task->save();
 
-        return "Added the task “{$task->title}”.";
+        return $this->outcome("Added the task “{$task->title}”.", 'task', $task->id, $task->title, $this->log->diff([], $this->log->taskFields($task, $timezone)));
     }
 
     /**
      * @param  array<string, mixed>  $arguments
+     * @return array{result: string, subject: array<string, mixed>}
      */
-    private function planSession(User $user, array $arguments): string
+    private function planSession(User $user, array $arguments, string $timezone): array
     {
         $task = $this->openTask($user, $arguments['task_id'] ?? null);
         $start = CarbonImmutable::parse($arguments['starts_at'])->utc();
         $end = CarbonImmutable::parse($arguments['ends_at'])->utc();
+        $session = null;
 
-        DB::transaction(function () use ($user, $task, $start, $end) {
+        DB::transaction(function () use ($user, $task, $start, $end, &$session) {
             // The same lock the calendar uses, so two saves cannot both slip past the overlap check.
             DB::table('users')->where('id', $user->id)->lockForUpdate()->first();
 
@@ -84,27 +104,33 @@ class ProposalExecutor
             $session->save();
         });
 
-        return "Planned time for “{$task->title}”.";
+        $when = $start->setTimezone($timezone)->format('D M j, g:i').'–'.$end->setTimezone($timezone)->format('g:i A');
+
+        return $this->outcome("Planned time for “{$task->title}”.", 'session', $session->id, $task->title, [['label' => 'Work session', 'from' => null, 'to' => $when]]);
     }
 
     /**
      * @param  array<string, mixed>  $arguments
+     * @return array{result: string, subject: array<string, mixed>}
      */
-    private function completeTask(User $user, array $arguments): string
+    private function completeTask(User $user, array $arguments, string $timezone): array
     {
         $task = $this->openTask($user, $arguments['task_id'] ?? null);
+        $before = $this->log->taskFields($task, $timezone);
         $task->completed_at = now();
         $task->save();
 
-        return "Marked “{$task->title}” as done.";
+        return $this->outcome("Marked “{$task->title}” as done.", 'task', $task->id, $task->title, $this->log->diff($before, $this->log->taskFields($task, $timezone)));
     }
 
     /**
      * @param  array<string, mixed>  $arguments
+     * @return array{result: string, subject: array<string, mixed>}
      */
-    private function updateTask(User $user, array $arguments, string $timezone): string
+    private function updateTask(User $user, array $arguments, string $timezone): array
     {
         $task = $this->anyTask($user, $arguments['task_id'] ?? null);
+        $before = $this->log->taskFields($task, $timezone);
         $changes = $arguments['changes'] ?? [];
 
         foreach (['title', 'priority', 'notes'] as $field) {
@@ -129,24 +155,27 @@ class ProposalExecutor
 
         $task->save();
 
-        return "Updated “{$task->title}”.";
+        return $this->outcome("Updated “{$task->title}”.", 'task', $task->id, $task->title, $this->log->diff($before, $this->log->taskFields($task, $timezone)));
     }
 
     /**
      * @param  array<string, mixed>  $arguments
+     * @return array{result: string, subject: array<string, mixed>}
      */
-    private function deleteTask(User $user, array $arguments): string
+    private function deleteTask(User $user, array $arguments, string $timezone): array
     {
         $task = $this->anyTask($user, $arguments['task_id'] ?? null);
+        $before = $this->log->taskFields($task, $timezone);
         $task->delete();
 
-        return "Deleted the task “{$task->title}”.";
+        return $this->outcome("Deleted the task “{$task->title}”.", 'task', $task->id, $task->title, $this->log->diff($before, []));
     }
 
     /**
      * @param  array<string, mixed>  $arguments
+     * @return array{result: string, subject: array<string, mixed>}
      */
-    private function createRoutine(User $user, array $arguments, string $timezone): string
+    private function createRoutine(User $user, array $arguments, string $timezone): array
     {
         $routine = new Routine([
             'title' => $arguments['title'],
@@ -160,15 +189,17 @@ class ProposalExecutor
         $routine->user()->associate($user);
         $routine->save();
 
-        return "Added the routine “{$routine->title}”.";
+        return $this->outcome("Added the routine “{$routine->title}”.", 'routine', $routine->id, $routine->title, $this->log->diff([], $this->log->routineFields($routine)));
     }
 
     /**
      * @param  array<string, mixed>  $arguments
+     * @return array{result: string, subject: array<string, mixed>}
      */
-    private function updateRoutine(User $user, array $arguments): string
+    private function updateRoutine(User $user, array $arguments): array
     {
         $routine = $this->routine($user, $arguments['routine_id'] ?? null);
+        $before = $this->log->routineFields($routine);
         $changes = $arguments['changes'] ?? [];
         $reschedules = array_intersect_key($changes, array_flip(['days', 'start_time', 'minutes'])) !== [];
 
@@ -197,18 +228,29 @@ class ProposalExecutor
 
         $routine->save();
 
-        return "Updated the routine “{$routine->title}”.";
+        return $this->outcome("Updated the routine “{$routine->title}”.", 'routine', $routine->id, $routine->title, $this->log->diff($before, $this->log->routineFields($routine->refresh())));
     }
 
     /**
      * @param  array<string, mixed>  $arguments
+     * @return array{result: string, subject: array<string, mixed>}
      */
-    private function deleteRoutine(User $user, array $arguments): string
+    private function deleteRoutine(User $user, array $arguments): array
     {
         $routine = $this->routine($user, $arguments['routine_id'] ?? null);
+        $before = $this->log->routineFields($routine);
         $routine->delete();
 
-        return "Deleted the routine “{$routine->title}”.";
+        return $this->outcome("Deleted the routine “{$routine->title}”.", 'routine', $routine->id, $routine->title, $this->log->diff($before, []));
+    }
+
+    /**
+     * @param  list<array{label: string, from: string|null, to: string|null}>  $changes
+     * @return array{result: string, subject: array<string, mixed>}
+     */
+    private function outcome(string $result, string $type, int $id, string $title, array $changes): array
+    {
+        return ['result' => $result, 'subject' => ['type' => $type, 'id' => $id, 'title' => $title, 'changes' => $changes]];
     }
 
     private function anyTask(User $user, mixed $id): Task
@@ -223,11 +265,7 @@ class ProposalExecutor
 
     private function openTask(User $user, mixed $id): Task
     {
-        $task = is_numeric($id) ? $user->tasks()->find((int) $id) : null;
-
-        if ($task === null) {
-            throw new ProposalFailed('That task no longer exists.');
-        }
+        $task = $this->anyTask($user, $id);
 
         if ($task->completed_at !== null) {
             throw new ProposalFailed('That task is already done.');

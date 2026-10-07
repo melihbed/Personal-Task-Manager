@@ -45,6 +45,9 @@ class AssistantTools
             ], ['from_date', 'to_date']),
             $tool('list_coursework', 'List the user\'s Canvas assignments, quizzes and discussions that are not finished, with course, due date and whether they are missing.'),
             $tool('list_routines', 'List the user\'s repeating routines (things they do on certain weekdays), with their ids.'),
+            $tool('list_my_changes', 'List what the assistant has changed, or was asked to change and the user declined, newest first, with what changed from and to. Use this to answer "what happened to my task?" or "what did you change?".', [
+                'about' => $text('Optional: part of a task or routine name, to see only changes to it.'),
+            ]),
             $tool('create_task', 'Propose a NEW task that does not exist yet. To change, rename, reprioritise or reschedule a task that already exists, use update_task instead. The user must approve it before it exists.', [
                 'title' => $text('Short task title.'),
                 'due_date' => $text('Optional deadline day: YYYY-MM-DD, today, tomorrow, or a weekday name like friday or next tuesday.'),
@@ -116,6 +119,7 @@ class AssistantTools
                 'plan_session' => $this->proposal($this->proposePlanSession($user, $timezone, $arguments)),
                 'complete_task' => $this->proposal($this->proposeCompleteTask($user, $timezone, $arguments)),
                 'list_routines' => ['result' => ['routines' => $this->listRoutines($user)], 'proposal' => null],
+                'list_my_changes' => ['result' => ['changes' => $this->listChanges($user, $timezone, (string) ($arguments['about'] ?? ''))], 'proposal' => null],
                 'update_task' => $this->proposal($this->proposeUpdateTask($user, $timezone, $arguments)),
                 'delete_task' => $this->proposal($this->proposeDeleteTask($user, $timezone, $arguments)),
                 'create_routine' => $this->proposal($this->proposeCreateRoutine($timezone, $arguments)),
@@ -307,6 +311,25 @@ class AssistantTools
             'timezone' => $timezone,
             'status' => 'pending',
         ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function listChanges(User $user, string $timezone, string $about): array
+    {
+        $words = $this->words($about);
+
+        return $user->assistantActions()->latest('id')->limit(100)->get()
+            ->filter(fn ($action) => $words === [] || collect($words)->every(fn (string $word) => in_array($word, $this->words((string) $action->subject_title.' '.$action->summary), true)))
+            ->take(15)
+            ->map(fn ($action) => [
+                'when' => $action->created_at->setTimezone($timezone)->format('D M j, g:i A'),
+                'outcome' => $action->status,
+                'what' => $action->summary,
+                'details' => collect($action->changes ?? [])->map(fn (array $change) => "{$change['label']}: ".($change['from'] ?? 'none').' → '.($change['to'] ?? 'none'))->all(),
+                'error' => $action->status === 'failed' ? $action->result : null,
+            ])->values()->all();
     }
 
     /**
@@ -523,8 +546,7 @@ class AssistantTools
     private function findTask(User $user, array $arguments, bool $openOnly): Task
     {
         $tasks = $user->tasks()->when($openOnly, fn ($query) => $query->whereNull('completed_at'))->get(['id', 'title', 'completed_at']);
-        $byId = is_numeric($arguments['task_id'] ?? null) ? $tasks->firstWhere('id', (int) $arguments['task_id']) : null;
-        $match = $byId ?? $this->match($tasks, (string) ($arguments['task'] ?? ''), 'task');
+        $match = $this->pick($tasks, $arguments['task'] ?? '', $arguments['task_id'] ?? null, 'task');
 
         return $match === null
             ? throw new ProposalFailed($openOnly && $user->tasks()->whereNotNull('completed_at')->where('id', $arguments['task_id'] ?? 0)->exists() ? 'That task is already done.' : 'I could not find that task. Use list_tasks, then pass the task\'s title in `task`.')
@@ -537,12 +559,26 @@ class AssistantTools
     private function findRoutine(User $user, array $arguments): Routine
     {
         $routines = $user->routines()->get(['id', 'title']);
-        $byId = is_numeric($arguments['routine_id'] ?? null) ? $routines->firstWhere('id', (int) $arguments['routine_id']) : null;
-        $match = $byId ?? $this->match($routines, (string) ($arguments['routine'] ?? ''), 'routine');
+        $match = $this->pick($routines, $arguments['routine'] ?? '', $arguments['routine_id'] ?? null, 'routine');
 
         return $match === null
             ? throw new ProposalFailed('I could not find that routine. Use list_routines, then pass the routine\'s name in `routine`.')
             : $user->routines()->findOrFail($match->id);
+    }
+
+    /**
+     * What the user named wins over an id: a small model often guesses an id, but copies a name from the user's own words.
+     * The id is used only when no name was given.
+     *
+     * @param  Collection<int, Task|Routine>  $candidates
+     */
+    private function pick(Collection $candidates, mixed $name, mixed $id, string $noun): Task|Routine|null
+    {
+        if (is_string($name) && trim($name) !== '') {
+            return $this->match($candidates, $name, $noun);
+        }
+
+        return is_numeric($id) ? $candidates->firstWhere('id', (int) $id) : null;
     }
 
     /**
@@ -574,7 +610,8 @@ class AssistantTools
     {
         preg_match_all('/[\p{L}\p{N}]+/u', mb_strtolower($text), $found);
 
-        return array_values(array_filter($found[0], fn (string $word) => mb_strlen($word) > 1));
+        // One-letter words stay ("Upper B" is not "Upper A"); filler words a user adds around a name do not count.
+        return array_values(array_filter($found[0], fn (string $word) => ! in_array($word, ['the', 'a', 'an', 'my', 'of', 'to', 'task', 'routine'], true)));
     }
 
     /**

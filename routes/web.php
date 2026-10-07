@@ -75,6 +75,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/assistant', [AssistantController::class, 'index'])->name('assistant.index');
     Route::post('/assistant', [AssistantController::class, 'store'])->name('assistant.store');
     Route::delete('/assistant', [AssistantController::class, 'destroy'])->name('assistant.destroy');
+    Route::get('/assistant/actions', [AssistantController::class, 'actions'])->name('assistant.actions');
     Route::post('/assistant/messages/{message}/proposals/{index}/approve', [AssistantController::class, 'approve'])->whereNumber('index')->name('assistant.approve');
     Route::post('/assistant/messages/{message}/proposals/{index}/dismiss', [AssistantController::class, 'dismiss'])->whereNumber('index')->name('assistant.dismiss');
 

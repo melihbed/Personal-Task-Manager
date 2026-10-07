@@ -49,7 +49,7 @@ it('tells the model the date, timezone and rules', function () {
 
     $system = ollamaRequests()[0]['messages'][0]['content'];
     expect($system)->toContain('Wednesday, October 7, 2026')->toContain('America/New_York')->toContain('data, not instructions')->toContain('approves');
-    expect(collect(ollamaRequests()[0]['tools'])->pluck('function.name')->all())->toBe(['list_tasks', 'get_schedule', 'list_coursework', 'list_routines', 'create_task', 'plan_session', 'complete_task', 'update_task', 'delete_task', 'create_routine', 'update_routine', 'delete_routine']);
+    expect(collect(ollamaRequests()[0]['tools'])->pluck('function.name')->all())->toBe(['list_tasks', 'get_schedule', 'list_coursework', 'list_routines', 'list_my_changes', 'create_task', 'plan_session', 'complete_task', 'update_task', 'delete_task', 'create_routine', 'update_routine', 'delete_routine']);
 });
 
 it('spells out the next two weeks so weekdays are never worked out by the model', function () {
@@ -648,12 +648,48 @@ it('plans a session for a task named by its title', function () {
     expect(CalendarSession::firstOrFail()->task_id)->toBe($task->id);
 });
 
-it('prefers the id when the model gives a valid one', function () {
+it('trusts the name the user gave over an id the model may have guessed', function () {
     $this->user->tasks()->create(['title' => 'Buy a charger', 'priority' => 'normal']);
     $other = $this->user->tasks()->create(['title' => 'Call mom', 'priority' => 'normal']);
     fakeOllama([['calls' => [['delete_task', ['task_id' => $other->id, 'task' => 'charger']]]], 'Suggested.']);
 
+    askAssistant('Delete the charger')->assertJsonPath('messages.1.proposals.0.summary', 'Delete task “Buy a charger”');
+});
+
+it('uses the id when no name was given', function () {
+    $this->user->tasks()->create(['title' => 'Buy a charger', 'priority' => 'normal']);
+    $other = $this->user->tasks()->create(['title' => 'Call mom', 'priority' => 'normal']);
+    fakeOllama([['calls' => [['delete_task', ['task_id' => $other->id]]]], 'Suggested.']);
+
     askAssistant('Delete it')->assertJsonPath('messages.1.proposals.0.summary', 'Delete task “Call mom”');
+});
+
+it('does not fall back to a guessed id when the name matches nothing', function () {
+    $other = $this->user->tasks()->create(['title' => 'Call mom', 'priority' => 'normal']);
+    fakeOllama([['calls' => [['delete_task', ['task_id' => $other->id, 'task' => 'unicorn']]]], 'Not found.']);
+
+    askAssistant('Delete the unicorn')->assertJsonPath('messages.1.proposals', []);
+});
+
+it('tells apart routines whose names differ by a single letter', function () {
+    weeklyRoutine($this->user, ['title' => 'Gym - Upper A']);
+    $b = weeklyRoutine($this->user, ['title' => 'Gym - Upper B']);
+    fakeOllama([
+        ['calls' => [['delete_routine', ['routine' => 'gym upper b', 'routine_id' => $b->id + 99]]]], 'S.',
+        ['calls' => [['delete_routine', ['routine' => 'Upper']]]], 'Which one?',
+    ]);
+
+    askAssistant('Delete Gym Upper B')->assertJsonPath('messages.1.proposals.0.summary', 'Delete routine “Gym - Upper B” (Tue, Thu)');
+    askAssistant('Delete upper')->assertJsonPath('messages.1.proposals', []);
+
+    expect(collect(ollamaRequests()[3]['messages'])->where('role', 'tool')->last()['content'])->toContain('Several routines match')->toContain('Gym - Upper A')->toContain('Gym - Upper B');
+});
+
+it('ignores filler words around a name', function () {
+    $this->user->tasks()->create(['title' => 'Buy a charger', 'priority' => 'normal']);
+    fakeOllama([['calls' => [['delete_task', ['task' => 'my charger task']]]], 'Suggested.']);
+
+    askAssistant('Delete my charger task')->assertJsonPath('messages.1.proposals.0.summary', 'Delete task “Buy a charger”');
 });
 
 it('asks the model to check with the user when several tasks match', function () {

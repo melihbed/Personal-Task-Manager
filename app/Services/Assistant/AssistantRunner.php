@@ -16,14 +16,32 @@ class AssistantRunner
 
     private const HISTORY = 14;
 
+    /** What the user is told while a tool runs. */
+    private const STATUS = [
+        'list_tasks' => 'Looking at your tasks…',
+        'get_schedule' => 'Checking your calendar…',
+        'list_coursework' => 'Checking your coursework…',
+        'list_routines' => 'Looking at your routines…',
+        'list_my_changes' => 'Looking at what changed…',
+        'create_task' => 'Preparing a suggestion…',
+        'update_task' => 'Preparing a suggestion…',
+        'delete_task' => 'Preparing a suggestion…',
+        'plan_session' => 'Preparing a suggestion…',
+        'complete_task' => 'Preparing a suggestion…',
+        'create_routine' => 'Preparing a suggestion…',
+        'update_routine' => 'Preparing a suggestion…',
+        'delete_routine' => 'Preparing a suggestion…',
+    ];
+
     public function __construct(private readonly OllamaClient $ollama, private readonly AssistantTools $tools) {}
 
     /**
+     * @param  (callable(array<string, mixed>): void)|null  $emit  told about progress: ['type' => 'status'|'delta'|'reset', ...]
      * @return array{user: AssistantMessage, assistant: AssistantMessage}
      *
      * @throws AssistantUnavailable
      */
-    public function reply(User $user, string $text, string $timezone): array
+    public function reply(User $user, string $text, string $timezone, ?callable $emit = null): array
     {
         // A slow model can outlast PHP's default 30 seconds.
         set_time_limit(420);
@@ -31,7 +49,7 @@ class AssistantRunner
         $asked = $user->assistantMessages()->create(['role' => 'user', 'content' => $text]);
 
         try {
-            [$content, $proposals] = $this->converse($user, $timezone);
+            [$content, $proposals] = $this->converse($user, $timezone, $emit ?? fn () => null);
         } catch (AssistantUnavailable $exception) {
             $asked->delete();
 
@@ -45,18 +63,28 @@ class AssistantRunner
     }
 
     /**
+     * @param  callable(array<string, mixed>): void  $emit
      * @return array{0: string, 1: list<array<string, mixed>>}
      */
-    private function converse(User $user, string $timezone): array
+    private function converse(User $user, string $timezone, callable $emit): array
     {
         $messages = [['role' => 'system', 'content' => $this->prompt($timezone)], ...$this->history($user)];
         $proposals = [];
 
         for ($round = 0; $round < self::MAX_ROUNDS; $round++) {
-            $turn = $this->ollama->chat($messages, $this->tools->definitions());
+            $streamed = false;
+            $turn = $this->ollama->chat($messages, $this->tools->definitions(), function (string $text) use ($emit, &$streamed) {
+                $streamed = true;
+                $emit(['type' => 'delta', 'text' => $text]);
+            });
 
             if ($turn['tool_calls'] === []) {
                 return [$this->finalText($turn['content'], $proposals), $proposals];
+            }
+
+            // Words said before a tool call are not part of the final answer.
+            if ($streamed) {
+                $emit(['type' => 'reset']);
             }
 
             $messages[] = [
@@ -66,6 +94,7 @@ class AssistantRunner
             ];
 
             foreach ($turn['tool_calls'] as $call) {
+                $emit(['type' => 'status', 'text' => self::STATUS[$call['name']] ?? 'Working on it…']);
                 $outcome = $this->tools->run($user, $timezone, $call['name'], $call['arguments']);
 
                 if ($outcome['proposal'] !== null && ! $this->alreadyProposed($proposals, $outcome['proposal'])) {
