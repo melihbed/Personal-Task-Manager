@@ -4,6 +4,8 @@ use App\Http\Controllers\CalendarSessionController;
 use App\Http\Controllers\CompletedTaskController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GoogleCalendarController;
+use App\Http\Controllers\GoogleEventController;
+use App\Http\Controllers\GoogleHiddenEventController;
 use App\Http\Controllers\GoogleImportController;
 use App\Http\Controllers\GoogleOAuthController;
 use App\Http\Controllers\GoogleSyncController;
@@ -51,6 +53,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('/integrations/google', [GoogleCalendarController::class, 'destroy'])->name('google.destroy');
     Route::get('/integrations/google/redirect', [GoogleOAuthController::class, 'redirect'])->name('google.redirect');
     Route::get('/integrations/google/callback', [GoogleOAuthController::class, 'callback'])->name('google.callback');
+    Route::patch('/integrations/google/events', [GoogleEventController::class, 'update'])->name('google.events.update');
+    Route::delete('/integrations/google/events', [GoogleEventController::class, 'destroy'])->name('google.events.destroy');
+    Route::post('/integrations/google/hidden', [GoogleHiddenEventController::class, 'store'])->name('google.hidden.store');
+    Route::delete('/integrations/google/hidden/{hidden}', [GoogleHiddenEventController::class, 'destroy'])->name('google.hidden.destroy');
     Route::post('/integrations/google/imports', [GoogleImportController::class, 'store'])->name('google.imports.store');
     Route::post('/integrations/google/sync', [GoogleSyncController::class, 'store'])->name('google.sync.store');
     Route::delete('/integrations/google/sync', [GoogleSyncController::class, 'destroy'])->name('google.sync.destroy');
@@ -62,6 +68,7 @@ Route::middleware('auth')->group(function () {
         ->where('date', '[0-9]{4}-[0-9]{2}-[0-9]{2}')
         ->name('routines.occurrences.update');
 
+    Route::patch('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
     Route::delete('/completed-tasks', [CompletedTaskController::class, 'destroy'])->name('completed-tasks.destroy');
     Route::patch('/tasks/{task}/completion', [TaskController::class, 'updateCompletion'])->name('tasks.completion.update');

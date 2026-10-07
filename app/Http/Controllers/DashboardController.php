@@ -28,7 +28,7 @@ class DashboardController extends Controller
         $user = $request->user();
         $responsibilities = $user->responsibilities()->whereNull('archived_at')
             ->orderBy('name')->get(['id', 'name', 'description', 'color']);
-        $tasks = $user->tasks()->select(['id', 'responsibility_id', 'title', 'priority', 'estimate_minutes', 'due_at', 'due_has_time', 'completed_at'])
+        $tasks = $user->tasks()->select(['id', 'responsibility_id', 'title', 'notes', 'priority', 'estimate_minutes', 'due_at', 'due_has_time', 'completed_at'])
             ->where(function ($query) use ($user) {
                 $query->whereNull('responsibility_id')->orWhereHas('responsibility', function ($responsibility) use ($user) {
                     $responsibility->where('user_id', $user->id)->whereNull('archived_at');

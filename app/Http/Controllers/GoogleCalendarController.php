@@ -42,6 +42,7 @@ class GoogleCalendarController extends Controller
                 'push_routines' => $account->push_routines,
                 'push_deadlines' => $account->push_deadlines,
             ] : null,
+            'hiddenEvents' => $account ? $user->googleEventImports()->where('kind', 'hidden')->orderBy('id')->get(['id', 'label'])->map(fn ($hidden) => ['id' => $hidden->id, 'label' => $hidden->label ?? '(No title)'])->values()->all() : [],
             'pushedEvents' => $account ? $user->googleEventLinks()->where('kind', '!=', 'occurrence')->count() : 0,
             // Listing calendars calls Google, so it loads after the page appears.
             'calendars' => $account && ! $account->needs_reconnect ? Inertia::defer(fn () => $this->calendars($account)) : [],
