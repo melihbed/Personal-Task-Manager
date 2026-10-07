@@ -4,6 +4,7 @@ namespace App\Services\GoogleCalendar;
 
 use App\Models\CalendarSession;
 use App\Models\GoogleAccount;
+use App\Models\GoogleEventImport;
 use App\Models\GoogleEventLink;
 use App\Models\Routine;
 use App\Models\Task;
@@ -62,6 +63,10 @@ class GoogleSync
 
     private function session(User $user, GoogleAccount $account, GoogleCalendarClient $client, int $id): void
     {
+        if (GoogleEventImport::isImported($user->id, 'session', $id)) {
+            return;
+        }
+
         $session = CalendarSession::where('user_id', $user->id)->with('task.responsibility')->find($id);
         $task = $session?->task;
 
@@ -74,6 +79,10 @@ class GoogleSync
 
     private function deadline(User $user, GoogleAccount $account, GoogleCalendarClient $client, int $id): void
     {
+        if (GoogleEventImport::isImported($user->id, 'task', $id)) {
+            return;
+        }
+
         $task = Task::where('user_id', $user->id)->with('responsibility')->find($id);
 
         if ($task && $task->due_at !== null && $task->completed_at === null && $this->visible($task->responsibility) && $account->pushes('deadline')) {
@@ -85,6 +94,10 @@ class GoogleSync
 
     private function routine(User $user, GoogleAccount $account, GoogleCalendarClient $client, int $id): void
     {
+        if (GoogleEventImport::isImported($user->id, 'routine', $id)) {
+            return;
+        }
+
         $routine = Routine::where('user_id', $user->id)->with(['responsibility', 'occurrences'])->find($id);
 
         if (! $routine || ! $this->visible($routine->responsibility) || ! $account->pushes('routine')) {

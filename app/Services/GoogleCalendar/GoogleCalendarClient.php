@@ -18,7 +18,9 @@ class GoogleCalendarClient
 
     private const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
-    private const EVENT_FIELDS = 'items(id,summary,status,start,end,htmlLink,transparency,extendedProperties/private),nextPageToken';
+    private const EVENT_FIELDS = 'items(id,summary,description,location,status,start,end,htmlLink,recurringEventId,attendees(self),transparency,extendedProperties/private),nextPageToken';
+
+    private const SINGLE_EVENT_FIELDS = 'id,summary,description,location,status,start,end,htmlLink,recurrence,recurringEventId';
 
     public function __construct(private readonly GoogleAccount $account) {}
 
@@ -73,6 +75,18 @@ class GoogleCalendarClient
         }
 
         return $items;
+    }
+
+    /**
+     * One event, with its recurrence rule when it is the master of a repeating series.
+     *
+     * @return array<string, mixed>
+     */
+    public function event(string $calendarId, string $eventId): array
+    {
+        return $this->send(fn (PendingRequest $request) => $request->get('/calendars/'.rawurlencode($calendarId).'/events/'.rawurlencode($eventId), [
+            'fields' => self::SINGLE_EVENT_FIELDS,
+        ]))->json();
     }
 
     /**

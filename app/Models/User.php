@@ -68,4 +68,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(GoogleEventLink::class);
     }
+
+    public function googleEventImports(): HasMany
+    {
+        return $this->hasMany(GoogleEventImport::class);
+    }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Models\GoogleEventImport;
 use App\Models\Task;
 use App\Services\GoogleCalendar\GoogleSyncDispatcher;
 
@@ -25,6 +26,13 @@ class TaskObserver
         if ($changed && ($task->due_at !== null || ! $task->wasRecentlyCreated)) {
             GoogleSyncDispatcher::item($task->user_id, 'deadline', $task->id);
         }
+
+        // A session's Google event carries its task's title and responsibility.
+        if ($task->wasChanged(['title', 'responsibility_id'])) {
+            foreach ($task->calendarSessions()->pluck('id') as $sessionId) {
+                GoogleSyncDispatcher::item($task->user_id, 'session', $sessionId);
+            }
+        }
     }
 
     public function deleting(Task $task): void
@@ -34,9 +42,11 @@ class TaskObserver
 
     public function deleted(Task $task): void
     {
+        GoogleEventImport::forget($task->user_id, 'task', $task->id);
         GoogleSyncDispatcher::item($task->user_id, 'deadline', $task->id);
 
         foreach (self::$sessionIds[$task->id] ?? [] as $sessionId) {
+            GoogleEventImport::forget($task->user_id, 'session', $sessionId);
             GoogleSyncDispatcher::item($task->user_id, 'session', $sessionId);
         }
 

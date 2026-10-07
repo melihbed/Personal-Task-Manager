@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Models\GoogleEventImport;
 use App\Models\Routine;
 use App\Services\GoogleCalendar\GoogleSyncDispatcher;
 
@@ -15,6 +16,7 @@ class RoutineObserver
 
     public function deleted(Routine $routine): void
     {
+        GoogleEventImport::forget($routine->user_id, 'routine', $routine->id);
         GoogleSyncDispatcher::item($routine->user_id, 'routine', $routine->id);
     }
 }
