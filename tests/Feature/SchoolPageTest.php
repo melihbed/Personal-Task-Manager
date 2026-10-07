@@ -21,7 +21,7 @@ it('lists open work, soonest first, with undated work last', function () {
     $this->actingAs($user)->get('/school')
         ->assertInertia(fn (Assert $page) => $page
             ->where('state', 'connected')
-            ->where('assignments.*.name', ['Missed', 'Soon', 'Later', 'Undated'])
+            ->where('assignments', fn ($assignments) => $assignments->pluck('name')->all() === ['Missed', 'Soon', 'Later', 'Undated'])
             ->where('assignments.0.missing', true)
             ->where('assignments.0.course_name', 'Data Structures'));
 });
@@ -33,7 +33,7 @@ it('keeps recently submitted work but not old submitted work', function () {
     CanvasAssignment::factory()->for($course, 'course')->create(['name' => 'Old', 'due_at' => now()->subDays(40), 'submitted' => true]);
 
     $this->actingAs($user)->get('/school')
-        ->assertInertia(fn (Assert $page) => $page->where('assignments.*.name', ['Recent']));
+        ->assertInertia(fn (Assert $page) => $page->where('assignments', fn ($assignments) => $assignments->pluck('name')->all() === ['Recent']));
 });
 
 it('leaves out courses that are not tracked and other people\'s work', function () {

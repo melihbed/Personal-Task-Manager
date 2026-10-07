@@ -55,7 +55,9 @@ function fakeCanvas(array $courses = [], array $assignments = [], array $failure
             str_contains($url, '/users/self/profile') => Http::response(['id' => 7, 'name' => 'Sam Student']),
             preg_match('#/courses/(\d+)/assignments#', $url, $match) === 1 => Http::response(CanvasFake::$assignments[(int) $match[1]] ?? []),
             str_contains($url, '/api/v1/courses') => Http::response(CanvasFake::$courses),
-            default => Http::response([], 404),
+            // Anything that is not Canvas (a later fake, such as Ollama's) is left for the next stub to answer.
+            str_contains($url, 'instructure.com') => Http::response([], 404),
+            default => null,
         };
     });
 }
