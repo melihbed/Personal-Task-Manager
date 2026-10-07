@@ -8,6 +8,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\GoogleCalendar\GoogleCalendarEvents;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 
 /**
  * What the assistant can do. Reading tools run straight away. Changing tools only build a proposal: nothing is
@@ -44,32 +45,36 @@ class AssistantTools
             ], ['from_date', 'to_date']),
             $tool('list_coursework', 'List the user\'s Canvas assignments, quizzes and discussions that are not finished, with course, due date and whether they are missing.'),
             $tool('list_routines', 'List the user\'s repeating routines (things they do on certain weekdays), with their ids.'),
-            $tool('create_task', 'Propose a new task. The user must approve it before it exists.', [
+            $tool('create_task', 'Propose a NEW task that does not exist yet. To change, rename, reprioritise or reschedule a task that already exists, use update_task instead. The user must approve it before it exists.', [
                 'title' => $text('Short task title.'),
                 'due_date' => $text('Optional deadline day: YYYY-MM-DD, today, tomorrow, or a weekday name like friday or next tuesday.'),
                 'due_time' => $text('Optional deadline time, 24-hour HH:MM. Only with due_date.'),
                 'priority' => ['type' => 'string', 'enum' => ['low', 'normal', 'high']],
             ], ['title']),
             $tool('plan_session', 'Propose reserving calendar time to work on an existing task. The user must approve it.', [
-                'task_id' => ['type' => 'integer', 'description' => 'The id from list_tasks.'],
+                'task' => $text('The task\'s title, or part of it. Easiest; use this.'),
+                'task_id' => ['type' => 'integer', 'description' => 'Optional: the id from list_tasks, if you have it.'],
                 'date' => $text('Day: YYYY-MM-DD, today, tomorrow, or a weekday name like friday.'),
                 'start_time' => $text('Start time, 24-hour HH:MM.'),
                 'minutes' => ['type' => 'integer', 'description' => 'Length of the session in minutes, 5 to 720.'],
-            ], ['task_id', 'date', 'start_time', 'minutes']),
+            ], ['date', 'start_time', 'minutes']),
             $tool('complete_task', 'Propose marking an existing task as done. The user must approve it.', [
-                'task_id' => ['type' => 'integer', 'description' => 'The id from list_tasks.'],
-            ], ['task_id']),
-            $tool('update_task', 'Propose changing an existing task: its title, deadline, priority or notes. Pass only what changes. The user must approve it.', [
-                'task_id' => ['type' => 'integer', 'description' => 'The id from list_tasks.'],
+                'task' => $text('The task\'s title, or part of it. Easiest; use this.'),
+                'task_id' => ['type' => 'integer', 'description' => 'Optional: the id from list_tasks, if you have it.'],
+            ]),
+            $tool('update_task', 'Propose changing a task that ALREADY exists: rename it, move its deadline, change its priority or notes. Use this for words like change, rename, move, make, set, call it. Pass only what changes. The user must approve it.', [
+                'task' => $text('The title (or part of it) of the task to change. Easiest; use this.'),
+                'task_id' => ['type' => 'integer', 'description' => 'Optional: the id from list_tasks, if you have it.'],
                 'title' => $text('New title.'),
                 'due_date' => $text('New deadline day: YYYY-MM-DD, today, tomorrow, a weekday name, or "none" to remove the deadline.'),
                 'due_time' => $text('New deadline time, 24-hour HH:MM. Only with due_date.'),
                 'priority' => ['type' => 'string', 'enum' => ['low', 'normal', 'high']],
                 'notes' => $text('New notes for the task.'),
-            ], ['task_id']),
+            ]),
             $tool('delete_task', 'Propose deleting a task and its planned sessions. Only when the user clearly asks to delete or remove it. The user must approve it.', [
-                'task_id' => ['type' => 'integer', 'description' => 'The id from list_tasks.'],
-            ], ['task_id']),
+                'task' => $text('The title (or part of it) of the task to delete. Easiest; use this.'),
+                'task_id' => ['type' => 'integer', 'description' => 'Optional: the id from list_tasks, if you have it.'],
+            ]),
             $tool('create_routine', 'Propose a new repeating routine, such as "gym on Monday, Wednesday and Friday at 6 PM". The user must approve it.', [
                 'title' => $text('Short routine name.'),
                 'days' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Weekday names such as ["monday","wednesday"], or "weekdays", "weekends" or "daily".'],
@@ -79,16 +84,18 @@ class AssistantTools
                 'end_date' => $text('Optional last day it applies.'),
             ], ['title', 'days', 'start_time', 'minutes']),
             $tool('update_routine', 'Propose changing an existing routine. Pass only what changes. The user must approve it.', [
-                'routine_id' => ['type' => 'integer', 'description' => 'The id from list_routines.'],
+                'routine' => $text('The name (or part of it) of the routine to change. Easiest; use this.'),
+                'routine_id' => ['type' => 'integer', 'description' => 'Optional: the id from list_routines, if you have it.'],
                 'title' => $text('New name.'),
                 'days' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'The new full set of weekdays.'],
                 'start_time' => $text('New start time, 24-hour HH:MM.'),
                 'minutes' => ['type' => 'integer', 'description' => 'New length in minutes.'],
                 'end_date' => $text('New last day, or "none" to repeat with no end.'),
-            ], ['routine_id']),
+            ]),
             $tool('delete_routine', 'Propose deleting a routine. Only when the user clearly asks to delete or remove it. The user must approve it.', [
-                'routine_id' => ['type' => 'integer', 'description' => 'The id from list_routines.'],
-            ], ['routine_id']),
+                'routine' => $text('The name (or part of it) of the routine to delete. Easiest; use this.'),
+                'routine_id' => ['type' => 'integer', 'description' => 'Optional: the id from list_routines, if you have it.'],
+            ]),
         ];
     }
 
@@ -266,7 +273,7 @@ class AssistantTools
      */
     private function proposePlanSession(User $user, string $timezone, array $arguments): array
     {
-        $task = $this->ownedOpenTask($user, $arguments['task_id'] ?? null);
+        $task = $this->findTask($user, $arguments, true);
         $minutes = (int) ($arguments['minutes'] ?? 0);
 
         if ($minutes < 5 || $minutes > 720) {
@@ -291,7 +298,7 @@ class AssistantTools
      */
     private function proposeCompleteTask(User $user, string $timezone, array $arguments): array
     {
-        $task = $this->ownedOpenTask($user, $arguments['task_id'] ?? null);
+        $task = $this->findTask($user, $arguments, true);
 
         return [
             'type' => 'complete_task',
@@ -324,7 +331,7 @@ class AssistantTools
      */
     private function proposeUpdateTask(User $user, string $timezone, array $arguments): array
     {
-        $task = $this->ownedTask($user, $arguments['task_id'] ?? null);
+        $task = $this->findTask($user, $arguments, false);
         $changes = [];
         $parts = [];
 
@@ -387,7 +394,7 @@ class AssistantTools
      */
     private function proposeDeleteTask(User $user, string $timezone, array $arguments): array
     {
-        $task = $this->ownedTask($user, $arguments['task_id'] ?? null);
+        $task = $this->findTask($user, $arguments, false);
         $sessions = $task->calendarSessions()->count();
 
         return [
@@ -436,7 +443,7 @@ class AssistantTools
      */
     private function proposeUpdateRoutine(User $user, string $timezone, array $arguments): array
     {
-        $routine = $this->ownedRoutine($user, $arguments['routine_id'] ?? null);
+        $routine = $this->findRoutine($user, $arguments);
         $changes = [];
         $parts = [];
 
@@ -495,7 +502,7 @@ class AssistantTools
      */
     private function proposeDeleteRoutine(User $user, string $timezone, array $arguments): array
     {
-        $routine = $this->ownedRoutine($user, $arguments['routine_id'] ?? null);
+        $routine = $this->findRoutine($user, $arguments);
 
         return [
             'type' => 'delete_routine',
@@ -506,16 +513,68 @@ class AssistantTools
         ];
     }
 
-    private function ownedTask(User $user, mixed $id): Task
+    /**
+     * The task the model means: by id if it gave a valid one, otherwise by title. A title matches when it is the same, or
+     * contains the text, or contains every word of it, so a small model need not know ids. When several match, the model
+     * is told which, so it can ask the user.
+     *
+     * @param  array<string, mixed>  $arguments
+     */
+    private function findTask(User $user, array $arguments, bool $openOnly): Task
     {
-        return (is_numeric($id) ? $user->tasks()->find((int) $id) : null)
-            ?? throw new ProposalFailed('There is no task with that id. Use list_tasks to find the right id.');
+        $tasks = $user->tasks()->when($openOnly, fn ($query) => $query->whereNull('completed_at'))->get(['id', 'title', 'completed_at']);
+        $byId = is_numeric($arguments['task_id'] ?? null) ? $tasks->firstWhere('id', (int) $arguments['task_id']) : null;
+        $match = $byId ?? $this->match($tasks, (string) ($arguments['task'] ?? ''), 'task');
+
+        return $match === null
+            ? throw new ProposalFailed($openOnly && $user->tasks()->whereNotNull('completed_at')->where('id', $arguments['task_id'] ?? 0)->exists() ? 'That task is already done.' : 'I could not find that task. Use list_tasks, then pass the task\'s title in `task`.')
+            : $user->tasks()->findOrFail($match->id);
     }
 
-    private function ownedRoutine(User $user, mixed $id): Routine
+    /**
+     * @param  array<string, mixed>  $arguments
+     */
+    private function findRoutine(User $user, array $arguments): Routine
     {
-        return (is_numeric($id) ? $user->routines()->find((int) $id) : null)
-            ?? throw new ProposalFailed('There is no routine with that id. Use list_routines to find the right id.');
+        $routines = $user->routines()->get(['id', 'title']);
+        $byId = is_numeric($arguments['routine_id'] ?? null) ? $routines->firstWhere('id', (int) $arguments['routine_id']) : null;
+        $match = $byId ?? $this->match($routines, (string) ($arguments['routine'] ?? ''), 'routine');
+
+        return $match === null
+            ? throw new ProposalFailed('I could not find that routine. Use list_routines, then pass the routine\'s name in `routine`.')
+            : $user->routines()->findOrFail($match->id);
+    }
+
+    /**
+     * @param  Collection<int, Task|Routine>  $candidates
+     */
+    private function match(Collection $candidates, string $text, string $noun): Task|Routine|null
+    {
+        $needle = $this->words($text);
+
+        if ($needle === []) {
+            return null;
+        }
+
+        $joined = implode(' ', $needle);
+        $exact = $candidates->filter(fn ($item) => implode(' ', $this->words($item->title)) === $joined);
+        $found = $exact->isNotEmpty() ? $exact : $candidates->filter(fn ($item) => collect($needle)->every(fn (string $word) => in_array($word, $this->words($item->title), true)));
+
+        if ($found->count() > 1) {
+            throw new ProposalFailed("Several {$noun}s match: ".$found->take(5)->map(fn ($item) => "“{$item->title}” (id {$item->id})")->implode(', ').'. Ask the user which one they mean.');
+        }
+
+        return $found->first();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function words(string $text): array
+    {
+        preg_match_all('/[\p{L}\p{N}]+/u', mb_strtolower($text), $found);
+
+        return array_values(array_filter($found[0], fn (string $word) => mb_strlen($word) > 1));
     }
 
     /**
@@ -580,21 +639,6 @@ class AssistantTools
             $days === [6, 7] => 'weekend day',
             default => implode(', ', $this->dayNames($days)),
         };
-    }
-
-    private function ownedOpenTask(User $user, mixed $id): Task
-    {
-        $task = is_numeric($id) ? $user->tasks()->find((int) $id) : null;
-
-        if ($task === null) {
-            throw new ProposalFailed('There is no task with that id. Use list_tasks to find the right id.');
-        }
-
-        if ($task->completed_at !== null) {
-            throw new ProposalFailed('That task is already done.');
-        }
-
-        return $task;
     }
 
     /**

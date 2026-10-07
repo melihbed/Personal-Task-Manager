@@ -228,7 +228,7 @@ it('does not let the model touch another user\'s task, and tells the model why',
 
     askAssistant('Finish their task')->assertJsonPath('messages.1.proposals', []);
 
-    expect(collect(ollamaRequests()[1]['messages'])->where('role', 'tool')->pluck('content')->implode(' '))->toContain('no task with that id');
+    expect(collect(ollamaRequests()[1]['messages'])->where('role', 'tool')->pluck('content')->implode(' '))->toContain('could not find that task');
     expect($theirs->fresh()->completed_at)->toBeNull();
 });
 
@@ -301,7 +301,7 @@ it('explains when Ollama is not running, and forgets the unanswered message', fu
 it('explains when the model is not installed', function () {
     Http::fake(['*/api/chat' => Http::response(['error' => 'model not found'], 404)]);
 
-    askAssistant('Hi')->assertStatus(503)->assertJsonPath('message', fn (string $message) => str_contains($message, 'ollama pull gpt-oss:latest'));
+    askAssistant('Hi')->assertStatus(503)->assertJsonPath('message', fn (string $message) => str_contains($message, 'ollama pull qwen2.5:7b'));
 });
 
 it('validates the message', function () {
@@ -476,7 +476,7 @@ it('does not touch another user\'s routine, and says there is none', function (s
 
     askAssistant('Change it')->assertJsonPath('messages.1.proposals', []);
 
-    expect(collect(ollamaRequests()[1]['messages'])->firstWhere('role', 'tool')['content'])->toContain('no routine with that id');
+    expect(collect(ollamaRequests()[1]['messages'])->firstWhere('role', 'tool')['content'])->toContain('could not find that routine');
     expect($theirs->fresh()->title)->toBe('Theirs');
 })->with([['update_routine', ['title' => 'Mine now']], ['delete_routine', []]]);
 
@@ -611,10 +611,95 @@ it('can suggest several changes in one reply, each approved on its own', functio
 
 it('asks a reasoning model to think briefly, and leaves the setting out for other models', function () {
     fakeOllama(['Ok.', 'Ok.']);
+
+    config(['services.ollama.model' => 'gpt-oss:latest']);
     askAssistant('Hi');
 
-    config(['services.ollama.model' => 'qwen2.5:14b']);
+    config(['services.ollama.model' => 'qwen2.5:7b']);
     askAssistant('Hi again');
 
-    expect(ollamaRequests()[0])->toMatchArray(['model' => 'gpt-oss:latest', 'think' => 'low', 'keep_alive' => '30m'])->and(ollamaRequests()[1])->not->toHaveKey('think');
+    expect(ollamaRequests()[0])->toMatchArray(['model' => 'gpt-oss:latest', 'think' => 'low', 'keep_alive' => '10m'])->and(ollamaRequests()[1])->not->toHaveKey('think')->toMatchArray(['model' => 'qwen2.5:7b']);
 });
+
+it('finds a task or routine by its title, so the model need not know ids', function (string $tool, array $arguments, string $summary) {
+    $this->user->tasks()->create(['title' => 'Scope and Time Management [One Submission Per Team]', 'priority' => 'normal']);
+    $this->user->tasks()->create(['title' => 'Buy a charger', 'priority' => 'normal']);
+    weeklyRoutine($this->user, ['title' => 'Prepare breakfast for students']);
+    fakeOllama([['calls' => [[$tool, $arguments]]], 'Suggested.']);
+
+    askAssistant('Do it')->assertJsonPath('messages.1.proposals.0.summary', $summary);
+})->with([
+    'a task by its exact title' => ['delete_task', ['task' => 'Buy a charger'], 'Delete task “Buy a charger”'],
+    'a task by part of its title' => ['delete_task', ['task' => 'charger'], 'Delete task “Buy a charger”'],
+    'in any case' => ['delete_task', ['task' => 'BUY A CHARGER'], 'Delete task “Buy a charger”'],
+    'by the words in it, whatever the punctuation' => ['update_task', ['task' => 'Scope and Time Management (team)', 'priority' => 'high'], 'Change “Scope and Time Management [One Submission Per Team]”: priority high'],
+    'a task to complete' => ['complete_task', ['task' => 'charger'], 'Mark “Buy a charger” as done'],
+    'a routine by part of its name' => ['delete_routine', ['routine' => 'breakfast'], 'Delete routine “Prepare breakfast for students” (Tue, Thu)'],
+    'a routine to change' => ['update_routine', ['routine' => 'Prepare breakfast', 'minutes' => 30], 'Change routine “Prepare breakfast for students”: length 30 minutes'],
+]);
+
+it('plans a session for a task named by its title', function () {
+    $task = $this->user->tasks()->create(['title' => 'Write the essay', 'priority' => 'normal']);
+    fakeOllama([['calls' => [['plan_session', ['task' => 'essay', 'date' => 'tomorrow', 'start_time' => '15:00', 'minutes' => 60]]]], 'Suggested.']);
+    $id = askAssistant('Plan the essay tomorrow at 3')->json('messages.1.id');
+
+    $this->postJson("/assistant/messages/{$id}/proposals/0/approve")->assertOk();
+
+    expect(CalendarSession::firstOrFail()->task_id)->toBe($task->id);
+});
+
+it('prefers the id when the model gives a valid one', function () {
+    $this->user->tasks()->create(['title' => 'Buy a charger', 'priority' => 'normal']);
+    $other = $this->user->tasks()->create(['title' => 'Call mom', 'priority' => 'normal']);
+    fakeOllama([['calls' => [['delete_task', ['task_id' => $other->id, 'task' => 'charger']]]], 'Suggested.']);
+
+    askAssistant('Delete it')->assertJsonPath('messages.1.proposals.0.summary', 'Delete task “Call mom”');
+});
+
+it('asks the model to check with the user when several tasks match', function () {
+    $this->user->tasks()->create(['title' => 'Homework 1', 'priority' => 'normal']);
+    $this->user->tasks()->create(['title' => 'Homework 2', 'priority' => 'normal']);
+    fakeOllama([['calls' => [['delete_task', ['task' => 'homework']]]], 'Which one?']);
+
+    askAssistant('Delete my homework task')->assertJsonPath('messages.1.proposals', []);
+
+    expect(collect(ollamaRequests()[1]['messages'])->firstWhere('role', 'tool')['content'])->toContain('Several tasks match')->toContain('Homework 1')->toContain('Homework 2')->toContain('Ask the user which');
+});
+
+it('prefers the exact title when one task\'s title is part of another\'s', function () {
+    $this->user->tasks()->create(['title' => 'Read', 'priority' => 'normal']);
+    $this->user->tasks()->create(['title' => 'Read chapter 3', 'priority' => 'normal']);
+    fakeOllama([['calls' => [['delete_task', ['task' => 'read']]]], 'Suggested.']);
+
+    askAssistant('Delete read')->assertJsonPath('messages.1.proposals.0.summary', 'Delete task “Read”');
+});
+
+it('only looks at open tasks when completing or planning, and any task when editing', function () {
+    $done = $this->user->tasks()->create(['title' => 'Old essay', 'priority' => 'normal']);
+    $done->forceFill(['completed_at' => now()])->save();
+    $this->user->tasks()->create(['title' => 'Old essay revision', 'priority' => 'normal']);
+    fakeOllama([['calls' => [['complete_task', ['task' => 'old essay']]]], 'Suggested.', ['calls' => [['update_task', ['task' => 'old essay', 'priority' => 'low']]]], 'Suggested.']);
+
+    askAssistant('Done with the old essay')->assertJsonPath('messages.1.proposals.0.summary', 'Mark “Old essay revision” as done');
+    askAssistant('Make the old essay low priority')->assertJsonPath('messages.1.proposals.0.summary', 'Change “Old essay”: priority low');
+});
+
+it('does not match another user\'s task by title', function () {
+    User::factory()->create()->tasks()->create(['title' => 'Secret plan', 'priority' => 'normal']);
+    fakeOllama([['calls' => [['delete_task', ['task' => 'secret plan']]]], 'Not found.']);
+
+    askAssistant('Delete the secret plan')->assertJsonPath('messages.1.proposals', []);
+});
+
+it('says it could not find a task or routine that does not exist, and how to look', function (string $tool, array $arguments, string $hint) {
+    fakeOllama([['calls' => [[$tool, $arguments]]], 'Sorry.']);
+
+    askAssistant('Do it')->assertJsonPath('messages.1.proposals', []);
+
+    expect(collect(ollamaRequests()[1]['messages'])->firstWhere('role', 'tool')['content'])->toContain($hint);
+})->with([
+    'no such task' => ['delete_task', ['task' => 'unicorn'], 'list_tasks'],
+    'no task given' => ['delete_task', [], 'list_tasks'],
+    'no such routine' => ['delete_routine', ['routine' => 'unicorn'], 'list_routines'],
+    'no routine given' => ['update_routine', ['title' => 'X'], 'list_routines'],
+]);
