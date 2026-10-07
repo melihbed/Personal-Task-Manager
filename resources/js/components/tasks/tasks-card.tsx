@@ -6,6 +6,7 @@ import { buildSections, completedTasks, filterTasks, taskViews, type Responsibil
 import { useStoredState } from '../../lib/use-stored-state';
 import { useUndoableDelete } from '../../lib/use-undoable-delete';
 import AddTaskForm from '../add-task-form';
+import EditTaskDialog from '../edit-task-dialog';
 import ConfirmDialog from '../ui/confirm-dialog';
 import Menu from '../ui/menu';
 import { useToast } from '../ui/toast';
@@ -64,6 +65,7 @@ export default function TasksCard({
     const [completing, setCompleting] = useState<Set<number>>(new Set());
     const [confirmDelete, setConfirmDelete] = useState<PlannerTask | null>(null);
     const [confirmClear, setConfirmClear] = useState(false);
+    const [editing, setEditing] = useState<PlannerTask | null>(null);
     const [busy, setBusy] = useState(false);
     const [fresh, setFresh] = useState<Set<number>>(new Set());
     const known = useRef(new Set(tasks.map(task => task.id)));
@@ -157,6 +159,7 @@ export default function TasksCard({
             dragging={draggingTaskId === task.id}
             onToggle={toggle}
             onPlan={onSchedule}
+            onEdit={setEditing}
             onDelete={requestDelete}
             onDragStart={onDragTask}
             onDragEnd={() => onDragTask(null)}
@@ -309,6 +312,7 @@ export default function TasksCard({
                 </div>
             )}
 
+            {editing && <EditTaskDialog key={editing.id} task={editing} responsibilities={responsibilities} timezone={timezone} onClose={() => setEditing(null)} />}
             {confirmDelete && (
                 <ConfirmDialog
                     title={`Delete “${confirmDelete.title}”?`}

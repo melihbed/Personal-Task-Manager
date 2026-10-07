@@ -1,11 +1,11 @@
 import { useForm } from '@inertiajs/react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { durations, priorityLabels, type Priority } from '../lib/task-options';
 import DuePicker from './due-picker';
 import Button from './ui/button';
 import Popover from './ui/popover';
 
 type ResponsibilityOption = { id: number; name: string };
-type Priority = 'low' | 'normal' | 'high';
 type Props = {
     /** When provided, shows a picker (Inbox plus these). Omit to lock the task to `responsibilityId`. */
     responsibilities?: ResponsibilityOption[];
@@ -17,15 +17,6 @@ type Props = {
 };
 
 const NEW_RESPONSIBILITY = 'new';
-const durations = [
-    { minutes: 5, label: '5 min' },
-    { minutes: 15, label: '15 min' },
-    { minutes: 30, label: '30 min' },
-    { minutes: 60, label: '1 hour' },
-    { minutes: 90, label: '1.5 hours' },
-    { minutes: 120, label: '2 hours' },
-];
-const priorityLabels: Record<Priority, string> = { low: 'Low priority', normal: 'Normal priority', high: 'High priority' };
 
 export default function AddTaskForm({
     responsibilities,

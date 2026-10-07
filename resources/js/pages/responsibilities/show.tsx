@@ -2,6 +2,7 @@ import { router } from '@inertiajs/react';
 import { useCallback, useState } from 'react';
 import AddTaskForm from '../../components/add-task-form';
 import DuePill from '../../components/due-pill';
+import EditTaskDialog from '../../components/edit-task-dialog';
 import ConfirmDialog from '../../components/ui/confirm-dialog';
 import Menu from '../../components/ui/menu';
 import AppLayout from '../../layouts/app-layout';
@@ -9,7 +10,10 @@ import { useUndoableDelete } from '../../lib/use-undoable-delete';
 
 type Task = {
     id: number;
+    responsibility_id: number | null;
     title: string;
+    notes: string | null;
+    estimate_minutes: number | null;
     priority: string;
     due_at: string | null;
     due_has_time: boolean;
@@ -27,6 +31,7 @@ function ShowContent({ responsibility, tasks: allTasks }: Props) {
     const undoable = useUndoableDelete(useCallback((id: number) => `/tasks/${id}`, []), 'Task deleted');
     const [confirming, setConfirming] = useState<Task | null>(null);
     const [deleting, setDeleting] = useState(false);
+    const [editing, setEditing] = useState<Task | null>(null);
     const tasks = allTasks.filter(task => !undoable.pending.has(task.id));
     const [pending, setPending] = useState<number[]>([]);
     const [updateError, setUpdateError] = useState('');
@@ -76,6 +81,7 @@ function ShowContent({ responsibility, tasks: allTasks }: Props) {
                 <Menu
                     label={`Actions for ${task.title}`}
                     items={[
+                        { label: 'Edit task…', onSelect: () => setEditing(task) },
                         { label: complete ? 'Reopen' : 'Mark done', onSelect: () => toggleTask(task) },
                         { label: 'Delete task', onSelect: () => requestDelete(task), danger: true },
                     ]}
@@ -112,6 +118,7 @@ function ShowContent({ responsibility, tasks: allTasks }: Props) {
                     </details>
                 )}
             </div>
+            {editing && <EditTaskDialog key={editing.id} task={editing} timezone={timezone} onClose={() => setEditing(null)} />}
             {confirming && (
                 <ConfirmDialog
                     title={`Delete “${confirming.title}”?`}

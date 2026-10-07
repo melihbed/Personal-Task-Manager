@@ -17,6 +17,7 @@ type Props = {
     dragging: boolean;
     onToggle: (task: PlannerTask) => void;
     onPlan: (task: PlannerTask) => void;
+    onEdit: (task: PlannerTask) => void;
     onDelete: (task: PlannerTask) => void;
     onDragStart: (task: PlannerTask) => void;
     onDragEnd: () => void;
@@ -42,7 +43,7 @@ function startDrag(event: DragEvent<HTMLElement>, task: PlannerTask) {
     requestAnimationFrame(() => ghost.remove());
 }
 
-export default function TaskRow({ task, timezone, responsibility, leaving, fresh, dragging, onToggle, onPlan, onDelete, onDragStart, onDragEnd }: Props) {
+export default function TaskRow({ task, timezone, responsibility, leaving, fresh, dragging, onToggle, onPlan, onEdit, onDelete, onDragStart, onDragEnd }: Props) {
     const done = task.completed_at !== null;
 
     return (
@@ -90,6 +91,7 @@ export default function TaskRow({ task, timezone, responsibility, leaving, fresh
                         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--pm-muted)]">
                             {task.due_at && <DuePill task={task} timezone={timezone} />}
                             {task.estimate_minutes && <span>{formatLength(task.estimate_minutes)}</span>}
+                            {task.notes && <span title={task.notes}>≡ Notes</span>}
                             {task.calendar_sessions_count > 0 && <span>▦ {task.calendar_sessions_count} {task.calendar_sessions_count === 1 ? 'session' : 'sessions'}</span>}
                             <span className="inline-flex items-center gap-1">
                                 <span aria-hidden="true" className="size-1.5 rounded-full" style={{ background: responsibility?.color ?? 'var(--pm-accent)' }} />
@@ -104,6 +106,7 @@ export default function TaskRow({ task, timezone, responsibility, leaving, fresh
                     <Menu
                         label={`Actions for ${task.title}`}
                         items={[
+                            { label: 'Edit task…', onSelect: () => onEdit(task) },
                             ...(done ? [] : [{ label: 'Plan on calendar…', onSelect: () => onPlan(task) }]),
                             { label: done ? 'Reopen' : 'Mark done', onSelect: () => onToggle(task) },
                             { label: 'Delete task', onSelect: () => onDelete(task), danger: true },
