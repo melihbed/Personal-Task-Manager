@@ -2,12 +2,9 @@
 
 namespace App\Models;
 
-use App\Observers\RoutineOccurrenceObserver;
-use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[ObservedBy([RoutineOccurrenceObserver::class])]
 class RoutineOccurrence extends Model
 {
     protected $fillable = ['occurs_on', 'skipped', 'completed_at', 'starts_at', 'ends_at'];

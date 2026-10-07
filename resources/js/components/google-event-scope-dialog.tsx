@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { EditScope } from '../lib/google-events';
+import type { Scope } from '../lib/google-events';
 import Button from './ui/button';
 
-type Option = { value: EditScope; label: string; hint: string };
+type Option = { value: Scope; label: string; hint: string };
 
 type Props = {
     title: string;
@@ -12,14 +12,14 @@ type Props = {
     destructive?: boolean;
     busy: boolean;
     error: string;
-    onConfirm: (scope: EditScope) => void;
+    onConfirm: (scope: Scope) => void;
     onCancel: () => void;
 };
 
 /** Asks whether a change to a repeating event is for just that event or for the whole series. */
 export default function GoogleEventScopeDialog({ title, description, options, confirmLabel, destructive = false, busy, error, onConfirm, onCancel }: Props) {
     const dialog = useRef<HTMLDialogElement>(null);
-    const [scope, setScope] = useState<EditScope>(options[0].value);
+    const [scope, setScope] = useState<Scope>(options[0].value);
 
     useEffect(() => { dialog.current?.showModal(); }, []);
 

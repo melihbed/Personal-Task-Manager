@@ -20,6 +20,9 @@ class GoogleCalendarEvents
 {
     private const CACHE_SECONDS = 60;
 
+    /** The private property an older version of this app put on events it added to Google, so they never come back as new events. */
+    private const MARKER = 'planner';
+
     /**
      * @return list<array<string, mixed>>
      */
@@ -80,7 +83,7 @@ class GoogleCalendarEvents
      */
     private function event(array $item, string $calendarId, ?array $calendar, array $imported): ?array
     {
-        if (($item['status'] ?? '') === 'cancelled' || isset($item['extendedProperties']['private'][GoogleEventMapper::MARKER])) {
+        if (($item['status'] ?? '') === 'cancelled' || isset($item['extendedProperties']['private'][self::MARKER])) {
             return null;
         }
 

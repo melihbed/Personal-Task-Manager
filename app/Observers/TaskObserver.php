@@ -4,11 +4,8 @@ namespace App\Observers;
 
 use App\Models\GoogleEventImport;
 use App\Models\Task;
-use App\Services\GoogleCalendar\GoogleSyncDispatcher;
 
-/**
- * Pushes a task's deadline to Google Calendar, and cleans up after the task and its sessions are deleted.
- */
+/** Forgets where a deleted task, and the sessions that went with it, were copied from. */
 class TaskObserver
 {
     /**
@@ -19,22 +16,6 @@ class TaskObserver
      */
     private static array $sessionIds = [];
 
-    public function saved(Task $task): void
-    {
-        $changed = $task->wasRecentlyCreated || $task->wasChanged(['title', 'due_at', 'due_has_time', 'completed_at', 'responsibility_id']);
-
-        if ($changed && ($task->due_at !== null || ! $task->wasRecentlyCreated)) {
-            GoogleSyncDispatcher::item($task->user_id, 'deadline', $task->id);
-        }
-
-        // A session's Google event carries its task's title and responsibility.
-        if ($task->wasChanged(['title', 'responsibility_id'])) {
-            foreach ($task->calendarSessions()->pluck('id') as $sessionId) {
-                GoogleSyncDispatcher::item($task->user_id, 'session', $sessionId);
-            }
-        }
-    }
-
     public function deleting(Task $task): void
     {
         self::$sessionIds[$task->id] = $task->calendarSessions()->pluck('id')->all();
@@ -43,11 +24,9 @@ class TaskObserver
     public function deleted(Task $task): void
     {
         GoogleEventImport::forget($task->user_id, 'task', $task->id);
-        GoogleSyncDispatcher::item($task->user_id, 'deadline', $task->id);
 
         foreach (self::$sessionIds[$task->id] ?? [] as $sessionId) {
             GoogleEventImport::forget($task->user_id, 'session', $sessionId);
-            GoogleSyncDispatcher::item($task->user_id, 'session', $sessionId);
         }
 
         unset(self::$sessionIds[$task->id]);

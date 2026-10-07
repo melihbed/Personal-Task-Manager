@@ -1,9 +1,11 @@
 <?php
 
+use App\Models\CalendarEvent;
 use App\Models\CalendarSession;
 use App\Models\Routine;
 use App\Models\Task;
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -115,56 +117,43 @@ describe('the dragged range', function () {
 });
 
 describe('an event', function () {
-    it('is added to the primary Google calendar by default', function () {
-        $user = googleUser(['import_calendar_ids' => ['primary-id', 'cal-1']]);
+    it('is added as the app\'s own event at the dragged time, and nothing is sent anywhere', function () {
         fakeGoogle();
 
-        $this->actingAs($user)->post('/calendar/items', dragged(['type' => 'event', 'title' => 'Dentist', 'reserve' => null]))->assertRedirect()->assertSessionHas('status', 'Added to Google Calendar.');
+        $this->post('/calendar/items', dragged(['type' => 'event', 'title' => 'Dentist', 'location' => ' Main St clinic ', 'reserve' => null]))->assertRedirect()->assertSessionHas('status', 'Event added.');
 
-        $write = googleWrites()->firstWhere(fn ($request) => $request->method() === 'POST');
-        expect($write->url())->toContain('/calendars/primary-id/events')
-            ->and($write->data()['summary'])->toBe('Dentist')
-            ->and($write->data()['start'])->toBe(['dateTime' => '2026-10-07T15:00:00', 'timeZone' => 'America/New_York'])
-            ->and($write->data()['end'])->toBe(['dateTime' => '2026-10-07T16:30:00', 'timeZone' => 'America/New_York']);
-        expect(Task::count())->toBe(0);
+        $event = CalendarEvent::firstOrFail();
+        expect($event->user_id)->toBe($this->user->id)->and($event->title)->toBe('Dentist')->and($event->location)->toBe('Main St clinic')->and($event->all_day)->toBeFalse()
+            ->and($event->starts_at->toIso8601String())->toBe('2026-10-07T19:00:00+00:00')->and($event->ends_at->toIso8601String())->toBe('2026-10-07T20:30:00+00:00')
+            ->and($event->responsibility_id)->toBeNull();
+        expect(Task::count())->toBe(0)->and(CalendarSession::count())->toBe(0);
+        Http::assertNothingSent();
     });
 
-    it('can go to another writable calendar that is shown in the planner', function () {
-        $user = googleUser(['import_calendar_ids' => ['primary-id', 'cal-1']]);
-        fakeGoogle();
+    it('works without Google, and without a place', function () {
+        $this->post('/calendar/items', dragged(['type' => 'event', 'reserve' => null]))->assertSessionHasNoErrors();
 
-        $this->actingAs($user)->post('/calendar/items', dragged(['type' => 'event', 'calendar_id' => 'cal-1', 'reserve' => null]))->assertSessionHasNoErrors();
-
-        expect(googleWrites()->firstWhere(fn ($request) => $request->method() === 'POST')->url())->toContain('/calendars/cal-1/events');
+        expect(CalendarEvent::firstOrFail()->location)->toBeNull();
     });
 
-    it('refuses a calendar that is read-only or not shown in the planner', function (string $calendar) {
-        $user = googleUser(['import_calendar_ids' => ['primary-id', 'holidays']]);
-        fakeGoogle();
+    it('goes in the chosen responsibility', function () {
+        $responsibility = $this->user->responsibilities()->create(['name' => 'School']);
 
-        $this->actingAs($user)->postJson('/calendar/items', dragged(['type' => 'event', 'calendar_id' => $calendar, 'reserve' => null]))->assertJsonValidationErrors('type');
+        $this->post('/calendar/items', dragged(['type' => 'event', 'reserve' => null, 'responsibility_id' => $responsibility->id]));
 
-        expect(googleWrites())->toHaveCount(0);
-    })->with(['holidays', 'cal-1', 'someone-elses']);
-
-    it('needs Google Calendar to be connected', function () {
-        $this->postJson('/calendar/items', dragged(['type' => 'event', 'reserve' => null]))->assertJsonValidationErrors('type');
+        expect(CalendarEvent::firstOrFail()->responsibility_id)->toBe($responsibility->id);
     });
 
-    it('needs a Google connection that still works', function () {
-        $user = googleUser(['needs_reconnect' => true]);
-        fakeGoogle();
+    it('may overlap anything, since it is just time that is taken', function () {
+        plannedSession($this->user, null, '2026-10-07 19:30:00');
 
-        $this->actingAs($user)->postJson('/calendar/items', dragged(['type' => 'event', 'reserve' => null]))->assertJsonValidationErrors('type');
+        $this->post('/calendar/items', dragged(['type' => 'event', 'reserve' => null]))->assertSessionHasNoErrors();
 
-        expect(googleWrites())->toHaveCount(0);
+        expect(CalendarEvent::count())->toBe(1);
     });
 
-    it('says so when Google refuses it', function () {
-        $user = googleUser(['import_calendar_ids' => ['primary-id']]);
-        fakeGoogle(['POST /events' => 403]);
-
-        $this->actingAs($user)->postJson('/calendar/items', dragged(['type' => 'event', 'reserve' => null]))->assertJsonValidationErrors('type');
+    it('refuses a place that is too long', function () {
+        $this->postJson('/calendar/items', dragged(['type' => 'event', 'reserve' => null, 'location' => str_repeat('a', 256)]))->assertJsonValidationErrors('location');
     });
 });
 

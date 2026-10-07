@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CalendarEvent;
 use App\Models\CalendarSession;
 use App\Models\RoutineOccurrence;
 use App\Models\User;
@@ -75,11 +76,35 @@ class DashboardController extends Controller
             'email' => $user->email,
             'responsibilities' => $responsibilities,
             'tasks' => $tasks,
+            'events' => $this->events($user, $start, $end, $timezone),
+            'todayEvents' => $this->events($user, $todayStart, $todayEnd, $timezone),
             'sessions' => $sessions,
             'todaySessions' => $todaySessions->values()->all(),
             'weekStart' => $start->format('Y-m-d'),
             'timezone' => $timezone,
         ]);
+    }
+
+    /**
+     * The user's own events that overlap a window. A timed event overlaps by its instants; an all-day event by its days in
+     * the calendar's timezone.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function events(User $user, CarbonImmutable $from, CarbonImmutable $to, string $timezone): array
+    {
+        $firstDay = $from->setTimezone($timezone)->toDateString();
+        $lastDay = $to->setTimezone($timezone)->subSecond()->toDateString();
+
+        return $user->calendarEvents()
+            ->where(fn ($query) => $query
+                ->where(fn ($timed) => $timed->where('all_day', false)->where('starts_at', '<', $to->utc())->where('ends_at', '>', $from->utc()))
+                ->orWhere(fn ($allDay) => $allDay->where('all_day', true)->where('starts_on', '<=', $lastDay)->where('ends_on', '>=', $firstDay)))
+            ->orderBy('starts_at')->orderBy('starts_on')
+            ->get()
+            ->map(fn (CalendarEvent $event) => $event->toPlanner())
+            ->values()
+            ->all();
     }
 
     /**

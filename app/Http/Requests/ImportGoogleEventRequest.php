@@ -29,7 +29,7 @@ class ImportGoogleEventRequest extends FormRequest
         return [
             'calendar_id' => ['required', 'string', 'max:255'],
             'event_id' => ['required', 'string', 'max:1024'],
-            'type' => ['required', Rule::in(['task', 'session', 'routine'])],
+            'type' => ['required', Rule::in(['event', 'task', 'session', 'routine'])],
             'responsibility_id' => [
                 'nullable',
                 'integer',

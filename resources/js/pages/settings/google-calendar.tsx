@@ -11,12 +11,8 @@ type Calendar = { id: string; name: string; primary: boolean; writable: boolean;
 type Account = {
     email: string | null;
     needs_reconnect: boolean;
-    calendar_id: string | null;
-    calendar_name: string | null;
+    /** The calendars that are previewed on the planner calendar, and moved over by "Move everything". */
     import_calendar_ids: string[];
-    push_sessions: boolean;
-    push_routines: boolean;
-    push_deadlines: boolean;
 };
 type Props = {
     configured: boolean;
@@ -27,18 +23,13 @@ type Props = {
     troubleshoot: boolean;
     redirectUri: string;
     account: Account | null;
-    pushedEvents: number;
+    /** How many Google events are already in the planner. */
+    importedCount: number;
     /** Google events hidden from the planner calendar. */
     hiddenEvents: { id: number; label: string }[];
     /** Loaded after the page appears, because it asks Google. */
     calendars?: Calendar[];
 };
-
-const pushOptions = [
-    { field: 'push_sessions', label: 'Work sessions', hint: 'Time you plan on the calendar for a task.' },
-    { field: 'push_routines', label: 'Routines', hint: 'Each routine becomes one repeating event, with skipped and moved days.' },
-    { field: 'push_deadlines', label: 'Task deadlines', hint: 'A short event at the due time, or an all-day event for a date-only deadline.' },
-] as const;
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
     return (
@@ -64,17 +55,15 @@ function Badge({ variant, children }: { variant: '' | 'ok' | 'warn'; children: R
 }
 
 /** Where things stand at a glance: credentials, connection, and whether anything is being sent to Google. */
-function StatusSummary({ configured, state, account, icon }: { configured: boolean; state: IntegrationState; account: Account | null; icon: string }) {
+function StatusSummary({ configured, state, account, icon, importedCount }: { configured: boolean; state: IntegrationState; account: Account | null; icon: string; importedCount: number }) {
     const connection = integrationStates[state === 'not_configured' ? 'not_connected' : state];
-    const sending = account !== null && !account.needs_reconnect && (account.push_sessions || account.push_routines || account.push_deadlines);
+    const previewing = account !== null && !account.needs_reconnect && account.import_calendar_ids.length > 0;
 
     const rows: { label: string; badge: ReactNode; note?: string }[] = [
         { label: 'Google credentials', badge: <Badge variant={configured ? 'ok' : 'warn'}>{configured ? 'Set' : 'Missing'}</Badge>, note: configured ? undefined : 'Add them to .env first' },
         { label: 'Connection', badge: <Badge variant={connection.variant}>{connection.label}</Badge>, note: account?.email ?? undefined },
-        {
-            label: 'Adding to Google',
-            badge: <Badge variant={sending ? 'ok' : account?.needs_reconnect ? 'warn' : ''}>{sending ? 'On' : account?.needs_reconnect ? 'Paused' : 'Off'}</Badge>,
-        },
+        { label: 'In your planner', badge: <Badge variant={importedCount > 0 ? 'ok' : ''}>{importedCount}</Badge>, note: importedCount === 1 ? 'event copied over' : 'events copied over' },
+        { label: 'Google preview', badge: <Badge variant={previewing ? 'ok' : ''}>{previewing ? 'On' : 'Off'}</Badge> },
     ];
 
     return (
@@ -83,7 +72,7 @@ function StatusSummary({ configured, state, account, icon }: { configured: boole
                 <img src={icon} alt="" width={36} height={36} className="size-9 shrink-0" />
                 <div>
                     <p className="font-medium">Google Calendar</p>
-                    <p className="text-xs text-[var(--pm-muted)]">Sync your plan with your Google account</p>
+                    <p className="text-xs text-[var(--pm-muted)]">Bring your calendar into your planner</p>
                 </div>
             </div>
             <dl className="divide-y divide-[var(--pm-border)]">
@@ -153,10 +142,10 @@ function Setup({ redirectUri }: { redirectUri: string }) {
 
 function Connect() {
     return (
-        <Section title="Connect your calendar">
+        <Section title="Bring your calendar over">
             <p className="text-sm text-[var(--pm-muted)]">
-                Show your Google events next to your plan, and add your work sessions, routines and deadlines to Google Calendar.
-                The app asks only to view and edit events and to list your calendars. You can disconnect at any time.
+                Move your Google events into this app, so your calendar, tasks and routines live in one place. The app only reads your calendar,
+                and it never changes anything in Google. You can disconnect at any time.
             </p>
             <a href="/integrations/google/redirect" className="pm-button mt-5">Connect Google Calendar</a>
             <p className="mt-4 text-xs text-[var(--pm-muted)]">
@@ -167,43 +156,30 @@ function Connect() {
     );
 }
 
-function Connected({ account, calendars, pushedEvents, hiddenEvents }: { account: Account; calendars?: Calendar[]; pushedEvents: number; hiddenEvents: { id: number; label: string }[] }) {
-    const [confirming, setConfirming] = useState<'remove' | 'disconnect' | null>(null);
+function Connected({ account, calendars, importedCount, hiddenEvents }: { account: Account; calendars?: Calendar[]; importedCount: number; hiddenEvents: { id: number; label: string }[] }) {
+    const { migrationNotes } = usePage<{ migrationNotes?: string[] }>().props;
+    const [confirming, setConfirming] = useState<'migrate' | 'disconnect' | null>(null);
     const [busy, setBusy] = useState(false);
-    const [syncing, setSyncing] = useState(false);
 
     // Google's "primary" alias stands for the main calendar; the list uses its real id.
-    const resolve = (id: string | null) => (id === 'primary' ? calendars?.find(calendar => calendar.primary)?.id ?? id : id) ?? '';
+    const resolve = (id: string) => (id === 'primary' ? calendars?.find(calendar => calendar.primary)?.id ?? id : id);
     const unique = (ids: string[]) => [...new Set(ids)];
 
-    const form = useForm({
-        calendar_id: account.calendar_id ?? '',
-        import_calendar_ids: account.import_calendar_ids,
-        push_sessions: account.push_sessions,
-        push_routines: account.push_routines,
-        push_deadlines: account.push_deadlines,
-    });
+    const form = useForm({ import_calendar_ids: account.import_calendar_ids });
     const { data, setData, patch, processing, errors } = form;
+    const migration = usePage<{ errors: Record<string, string> }>().props.errors?.migration;
 
     useEffect(() => {
         if (!calendars) return;
 
-        setData(current => ({ ...current, calendar_id: resolve(current.calendar_id), import_calendar_ids: unique(current.import_calendar_ids.map(resolve)) }));
+        setData('import_calendar_ids', unique(data.import_calendar_ids.map(resolve)));
         // The aliases are resolved once, when the calendar list arrives.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [calendars]);
 
-    const saved = {
-        calendar_id: resolve(account.calendar_id),
-        import_calendar_ids: unique(account.import_calendar_ids.map(resolve)),
-    };
-    const changed = data.calendar_id !== saved.calendar_id
-        || [...data.import_calendar_ids].sort().join() !== [...saved.import_calendar_ids].sort().join()
-        || pushOptions.some(option => data[option.field] !== account[option.field]);
-
-    function toggleImport(id: string) {
-        setData('import_calendar_ids', data.import_calendar_ids.includes(id) ? data.import_calendar_ids.filter(item => item !== id) : [...data.import_calendar_ids, id]);
-    }
+    const saved = unique(account.import_calendar_ids.map(resolve));
+    const changed = [...data.import_calendar_ids].sort().join() !== [...saved].sort().join();
+    const toggle = (id: string) => setData('import_calendar_ids', data.import_calendar_ids.includes(id) ? data.import_calendar_ids.filter(item => item !== id) : [...data.import_calendar_ids, id]);
 
     function run(action: () => void) {
         setBusy(true);
@@ -216,57 +192,38 @@ function Connected({ account, calendars, pushedEvents, hiddenEvents }: { account
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm">
                         Connected as <strong>{account.email ?? 'your Google account'}</strong>
-                        <span className="mt-1 block text-xs text-[var(--pm-muted)]">{pushedEvents} {pushedEvents === 1 ? 'event' : 'events'} added to Google Calendar</span>
+                        <span className="mt-1 block text-xs text-[var(--pm-muted)]">Read-only. The app never changes your Google Calendar.</span>
                     </p>
                     <Button type="button" variant="danger" size="small" onClick={() => setConfirming('disconnect')}>Disconnect</Button>
                 </div>
                 {account.needs_reconnect && (
                     <div role="alert" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-                        <span>Google no longer accepts the saved connection, so syncing is paused.</span>
+                        <span>Google no longer accepts the saved connection, so nothing can be read.</span>
                         <a href="/integrations/google/redirect" className="pm-button pm-button--small">Reconnect</a>
                     </div>
                 )}
             </Section>
 
             {!account.needs_reconnect && (
-                <Section title="Choose what to sync">
-                    {calendars === undefined ? <Skeleton /> : calendars.length === 0 ? (
-                        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                <Section title="Move your calendar into the app">
+                    <p className="text-sm text-[var(--pm-muted)]">
+                        Copies every upcoming event from the calendars below into your planner as your own events, and repeating ones as routines. After that, the app is your calendar:
+                        you can change, plan and delete everything here, and the preview of Google events switches off. Google is not changed.
+                    </p>
+
+                    {calendars === undefined ? <div className="mt-4"><Skeleton /></div> : calendars.length === 0 ? (
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
                             <span className="text-[var(--pm-muted)]">Could not load your Google calendars.</span>
                             <Button type="button" variant="secondary" size="small" onClick={() => router.reload({ only: ['calendars'] })}>Try again</Button>
                         </div>
                     ) : (
-                        <form onSubmit={(event) => { event.preventDefault(); patch('/integrations/google', { preserveScroll: true }); }} className="space-y-6">
-                            <div>
-                                <label htmlFor="google-calendar" className="text-sm font-medium">Add planner items to</label>
-                                <select id="google-calendar" value={data.calendar_id} onChange={(event) => setData('calendar_id', event.target.value)} className="pm-input cursor-pointer">
-                                    {calendars.filter(calendar => calendar.writable).map(calendar => (
-                                        <option key={calendar.id} value={calendar.id}>{calendar.name}{calendar.primary ? ' (primary)' : ''}</option>
-                                    ))}
-                                </select>
-                                <p className="mt-1.5 text-xs text-[var(--pm-muted)]">A separate “Planner” calendar keeps these events easy to hide or remove.</p>
-                                {errors.calendar_id && <p role="alert" className="mt-1 text-sm text-red-700">{errors.calendar_id}</p>}
-                            </div>
-
+                        <form onSubmit={(event) => { event.preventDefault(); patch('/integrations/google', { preserveScroll: true }); }} className="mt-5">
                             <fieldset>
-                                <legend className="text-sm font-medium">What to add to Google</legend>
-                                <div className="mt-2 space-y-3">
-                                    {pushOptions.map(option => (
-                                        <label key={option.field} className="flex cursor-pointer items-start gap-3">
-                                            <input type="checkbox" checked={data[option.field]} onChange={(event) => setData(option.field, event.target.checked)} className="mt-1 size-4 accent-[var(--pm-text)]" />
-                                            <span className="text-sm">{option.label}<span className="block text-xs text-[var(--pm-muted)]">{option.hint}</span></span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </fieldset>
-
-                            <fieldset>
-                                <legend className="text-sm font-medium">Show events from</legend>
-                                <p className="mt-1 text-xs text-[var(--pm-muted)]">These appear on your planner calendar, read-only, so you can see what overlaps.</p>
+                                <legend className="text-sm font-medium">Calendars</legend>
                                 <div className="mt-2 space-y-2">
                                     {calendars.map(calendar => (
                                         <label key={calendar.id} className="flex cursor-pointer items-center gap-3 text-sm">
-                                            <input type="checkbox" checked={data.import_calendar_ids.includes(calendar.id)} onChange={() => toggleImport(calendar.id)} className="size-4 accent-[var(--pm-text)]" />
+                                            <input type="checkbox" checked={data.import_calendar_ids.includes(calendar.id)} onChange={() => toggle(calendar.id)} className="size-4 accent-[var(--pm-text)]" />
                                             <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full" style={{ background: calendar.color ?? 'var(--pm-muted)' }} />
                                             {calendar.name}
                                         </label>
@@ -275,37 +232,25 @@ function Connected({ account, calendars, pushedEvents, hiddenEvents }: { account
                                 {errors.import_calendar_ids && <p role="alert" className="mt-1 text-sm text-red-700">{errors.import_calendar_ids}</p>}
                             </fieldset>
 
-                            <div className="pm-button-group">
-                                <Button type="submit" loading={processing} loadingLabel="Saving" disabled={!changed}>Save changes</Button>
+                            <div className="pm-button-group mt-5">
+                                <Button type="button" loading={busy && confirming === 'migrate'} loadingLabel="Moving your calendar" disabled={changed || processing || data.import_calendar_ids.length === 0 || busy} onClick={() => setConfirming('migrate')}>Move everything into my planner</Button>
+                                <Button type="submit" variant="secondary" loading={processing} loadingLabel="Saving" disabled={!changed}>Save choice</Button>
                             </div>
+                            {changed && <p className="mt-2 text-xs text-[var(--pm-muted)]">Save your choice of calendars before moving them.</p>}
                         </form>
                     )}
-                </Section>
-            )}
 
-            {!account.needs_reconnect && (
-                <Section title="Sync">
-                    <p className="text-sm text-[var(--pm-muted)]">
-                        Changes are sent to Google automatically, within a few seconds. Use these if something looks out of step.
-                    </p>
-                    <div className="pm-button-group mt-4">
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            loading={syncing}
-                            loadingLabel="Syncing"
-                            onClick={() => { setSyncing(true); router.post('/integrations/google/sync', {}, { preserveScroll: true, onFinish: () => setSyncing(false) }); }}
-                        >
-                            Sync now
-                        </Button>
-                        <Button type="button" variant="danger" onClick={() => setConfirming('remove')}>Remove planner events from Google</Button>
-                    </div>
+                    {migration && <p role="alert" className="mt-4 text-sm text-red-700">{migration}</p>}
+                    {migrationNotes && migrationNotes.length > 0 && (
+                        <ul className="mt-4 list-disc space-y-1 pl-5 text-xs text-[var(--pm-muted)]">{migrationNotes.map(note => <li key={note}>{note}</li>)}</ul>
+                    )}
+                    <p className="mt-4 text-xs text-[var(--pm-muted)]">{importedCount} {importedCount === 1 ? 'Google event is' : 'Google events are'} already in your planner. Running this again only brings in what is new.</p>
                 </Section>
             )}
 
             {hiddenEvents.length > 0 && (
                 <Section title="Hidden events">
-                    <p className="text-sm text-[var(--pm-muted)]">These Google events are hidden from your planner calendar. They are still in Google Calendar.</p>
+                    <p className="text-sm text-[var(--pm-muted)]">These Google events are hidden from the preview and from moving over. They are still in Google Calendar.</p>
                     <ul className="mt-3 divide-y divide-[var(--pm-border)]">
                         {hiddenEvents.map(hidden => (
                             <li key={hidden.id} className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
@@ -317,20 +262,21 @@ function Connected({ account, calendars, pushedEvents, hiddenEvents }: { account
                 </Section>
             )}
 
-            {confirming === 'remove' && (
+            {confirming === 'migrate' && (
                 <ConfirmDialog
-                    title="Remove planner events from Google?"
-                    description="Every work session, routine and deadline this app added to Google Calendar is deleted there. Your planner is not changed, and they come back the next time you sync."
-                    confirmLabel="Remove events"
+                    title="Move your Google calendar into the app?"
+                    description="Every upcoming event from the chosen calendars becomes your own event here, and repeating ones become routines. The Google preview then switches off. Nothing in Google changes, and events you hid are left out."
+                    confirmLabel="Move everything"
+                    destructive={false}
                     busy={busy}
-                    onConfirm={() => run(() => router.delete('/integrations/google/sync', { preserveScroll: true, onSuccess: () => setConfirming(null), onFinish: () => setBusy(false) }))}
+                    onConfirm={() => run(() => router.post('/integrations/google/migrate', { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }, { preserveScroll: true, onFinish: () => { setBusy(false); setConfirming(null); } }))}
                     onCancel={() => setConfirming(null)}
                 />
             )}
             {confirming === 'disconnect' && (
                 <ConfirmDialog
                     title="Disconnect Google Calendar?"
-                    description="The app stops syncing and forgets its access. Events it already added stay in Google Calendar; use “Remove planner events” first if you want them gone."
+                    description="The app forgets its access to Google. Everything already copied into your planner stays."
                     confirmLabel="Disconnect"
                     busy={busy}
                     onConfirm={() => run(() => router.delete('/integrations/google', { onFinish: () => { setBusy(false); setConfirming(null); } }))}
@@ -341,17 +287,17 @@ function Connected({ account, calendars, pushedEvents, hiddenEvents }: { account
     );
 }
 
-export default function GoogleCalendar({ configured, state, branding, troubleshoot, redirectUri, account, pushedEvents, hiddenEvents, calendars }: Props) {
+export default function GoogleCalendar({ configured, state, branding, troubleshoot, redirectUri, account, importedCount, hiddenEvents, calendars }: Props) {
     const { status } = usePage<{ status: string | null }>().props;
 
     return (
         <AppLayout title="Google Calendar" backHref="/integrations">
             <div className="mx-auto max-w-2xl space-y-5">
                 {status && <p role="status" className="rounded-xl bg-[var(--pm-surface)] px-4 py-3 text-sm shadow-sm">{status}</p>}
-                <StatusSummary configured={configured} state={state} account={account} icon={branding.icon} />
+                <StatusSummary configured={configured} state={state} account={account} icon={branding.icon} importedCount={importedCount} />
                 {!configured && <Setup redirectUri={redirectUri} />}
                 {configured && account === null && <Connect />}
-                {account !== null && <Connected account={account} calendars={calendars} pushedEvents={pushedEvents} hiddenEvents={hiddenEvents} />}
+                {account !== null && <Connected account={account} calendars={calendars} importedCount={importedCount} hiddenEvents={hiddenEvents} />}
                 <Troubleshooting redirectUri={redirectUri} open={troubleshoot} />
                 <p className="px-1 text-xs text-[var(--pm-muted)]">{branding.legal} Not affiliated with or endorsed by Google.</p>
             </div>

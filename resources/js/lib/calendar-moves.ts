@@ -1,5 +1,4 @@
-import type { EditValues } from './google-events';
-import { addDays, localToISO, zonedParts, type GoogleEvent, type PlannerTask } from './planner';
+import { addDays, localToISO, zonedParts, type PlannerEvent, type PlannerTask } from './planner';
 
 /** Minutes since midnight as a 24-hour "HH:MM". */
 export const clock24 = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
@@ -37,19 +36,19 @@ export function taskUpdatePayload(task: Pick<PlannerTask, 'title' | 'notes' | 'p
     };
 }
 
+export type EventTimes = { all_day: false; starts_at: string; ends_at: string } | { all_day: true; start_date: string; end_date: string };
+
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86_400_000);
 
 /**
- * The values to save when a Google event is dropped on a new day (and, for a timed event, a new start). The length is kept; an
- * all-day event keeps its number of days. Returns null when nothing would change or the time cannot exist.
+ * The times of an event dropped on a new day (and, for a timed event, a new start). The length is kept; an all-day event keeps
+ * its number of days. Returns null when nothing would change, or when the time cannot exist.
  */
-export function movedGoogleValues(event: GoogleEvent, date: string, minutes: number | null, timezone: string): EditValues | null {
+export function movedEvent(event: PlannerEvent, date: string, minutes: number | null, timezone: string): EventTimes | null {
     if (event.all_day && event.start_date && event.end_date) {
         if (event.start_date === date) return null;
 
-        const lastDay = addDays(event.end_date, -1);
-
-        return { title: event.title, startDate: date, startTime: '', endDate: addDays(date, daysBetween(event.start_date, lastDay)), endTime: '' };
+        return { all_day: true, start_date: date, end_date: addDays(date, daysBetween(event.start_date, event.end_date)) };
     }
 
     if (!event.starts_at || !event.ends_at || minutes === null) return null;
@@ -64,8 +63,20 @@ export function movedGoogleValues(event: GoogleEvent, date: string, minutes: num
 
     if (Date.parse(startsAt) === Date.parse(event.starts_at)) return null;
 
-    const start = zonedParts(new Date(startsAt), timezone);
-    const end = zonedParts(new Date(Date.parse(startsAt) + (Date.parse(event.ends_at) - Date.parse(event.starts_at))), timezone);
+    return { all_day: false, starts_at: new Date(startsAt).toISOString(), ends_at: new Date(Date.parse(startsAt) + (Date.parse(event.ends_at) - Date.parse(event.starts_at))).toISOString() };
+}
 
-    return { title: event.title, startDate: start.date, startTime: start.time, endDate: end.date, endTime: end.time };
+/** Everything the event update endpoint needs, so a move changes only the time. */
+export function eventUpdatePayload(event: Pick<PlannerEvent, 'title' | 'location' | 'notes' | 'responsibility_id'>, times: EventTimes) {
+    return { title: event.title, location: event.location, notes: event.notes, responsibility_id: event.responsibility_id, ...times };
+}
+
+/** A timed event's start and end as the clock shows them in a timezone, for filling a form. */
+export function eventFormValues(event: PlannerEvent, timezone: string): { startDate: string; startTime: string; endDate: string; endTime: string } {
+    if (event.all_day) return { startDate: event.start_date ?? '', startTime: '', endDate: event.end_date ?? '', endTime: '' };
+
+    const start = zonedParts(new Date(event.starts_at ?? 0), timezone);
+    const end = zonedParts(new Date(event.ends_at ?? 0), timezone);
+
+    return { startDate: start.date, startTime: start.time, endDate: end.date, endTime: end.time };
 }

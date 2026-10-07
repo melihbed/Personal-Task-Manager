@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { dueDay, dueMinutes, dueState, formatDue } from '../lib/deadlines';
-import { addDays, calendarScrollTop, dateLabel, dayLayout, minutesSinceMidnight, overlaps, timeLabel, zonedParts, type GoogleEvent, type PlannerSession, type PlannerTask, type RoutineOccurrence } from '../lib/planner';
+import { addDays, calendarScrollTop, dateLabel, dayLayout, minutesSinceMidnight, overlaps, timeLabel, zonedParts, type GoogleEvent, type PlannerEvent, type PlannerSession, type PlannerTask, type RoutineOccurrence } from '../lib/planner';
 
 type Props = {
     weekStart: string;
@@ -23,8 +23,11 @@ type Props = {
     /** A session or one routine occurrence was dragged to a new day or time; minutes is the new start. */
     onMoveSession: (session: PlannerSession, date: string, minutes: number) => void;
     onMoveRoutine: (occurrence: RoutineOccurrence, date: string, minutes: number) => void;
-    /** A Google event was dragged to a new day (minutes is the new start, or null for an all-day event). */
-    onMoveGoogle: (event: GoogleEvent, date: string, minutes: number | null) => void;
+    /** One of the app's events was dragged to a new day (minutes is the new start, or null for an all-day event). */
+    onMoveEvent: (event: PlannerEvent, date: string, minutes: number | null) => void;
+    /** The app's own events, and the handler for opening one. */
+    events: PlannerEvent[];
+    onSelectEvent: (event: PlannerEvent) => void;
     /** A deadline was dragged to a new day (minutes is the new time, or null for a date-only deadline). */
     onMoveDeadline: (task: PlannerTask, date: string, minutes: number | null) => void;
     /** Empty time was clicked or dragged across. start and end are minutes since midnight (end may be 1440); rect is where it is on screen. */
@@ -37,7 +40,7 @@ const CELL = 15;
 const cellOf = (y: number, rect: DOMRect) => Math.min(95, Math.max(0, Math.floor(((y - rect.top) / HOUR_HEIGHT * 60) / CELL)));
 
 /** A deadline or an all-day Google event being dragged. A timed deadline goes on the time grid; the rest go on the "Due" row. */
-type DueDrag = { task?: PlannerTask; event?: GoogleEvent; timed: boolean };
+type DueDrag = { task?: PlannerTask; event?: PlannerEvent; timed: boolean };
 
 /** Anything drawn as a block in the time grid: a work session or one day of a routine. */
 type Block = {
@@ -51,6 +54,7 @@ type Block = {
     session?: PlannerSession;
     routine?: RoutineOccurrence;
     google?: GoogleEvent;
+    event?: PlannerEvent;
 };
 
 const HOUR_HEIGHT = 56;
@@ -74,7 +78,9 @@ export default function WeeklyCalendar({
     onDropTask,
     onMoveSession,
     onMoveRoutine,
-    onMoveGoogle,
+    onMoveEvent,
+    events,
+    onSelectEvent,
     onMoveDeadline,
     onCreateRange,
     pendingRange,
@@ -126,6 +132,18 @@ export default function WeeklyCalendar({
                 ends_at: event.ends_at as string,
                 google: event,
             })),
+        ...events
+            .filter(event => !event.all_day && event.starts_at && event.ends_at)
+            .map((event): Block => ({
+                key: `event-${event.id}`,
+                title: event.title,
+                subtitle: event.location ?? 'Event',
+                color: null,
+                completed: false,
+                starts_at: event.starts_at as string,
+                ends_at: event.ends_at as string,
+                event,
+            })),
     ];
     const conflicts = new Set(
         blocks.filter(a => blocks.some(b => a.key !== b.key && (!a.google || !b.google) && overlaps(a.starts_at, a.ends_at, b.starts_at, b.ends_at))).map(block => block.key),
@@ -153,8 +171,9 @@ export default function WeeklyCalendar({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [blockSignatures, weekStart]);
 
+    const ownAllDay = (date: string) => events.filter(event => event.all_day && event.start_date && event.end_date && event.start_date <= date && date <= event.end_date);
     const googleAllDay = (date: string) => googleEvents.filter(event => event.all_day && event.start_date && event.end_date && event.start_date <= date && date < event.end_date);
-    const hasStrip = dates.some(date => googleAllDay(date).length > 0);
+    const hasStrip = dates.some(date => googleAllDay(date).length > 0 || ownAllDay(date).length > 0);
 
     const dateOnlyDeadlines = (date: string) => deadlines.filter(task => !task.due_has_time && dueDay(task, timezone) === date);
     const hasDateOnlyDeadlines = dates.some(date => dateOnlyDeadlines(date).length > 0);
@@ -168,7 +187,8 @@ export default function WeeklyCalendar({
     };
 
     function select(block: Block) {
-        if (block.google) onSelectGoogle(block.google);
+        if (block.event) onSelectEvent(block.event);
+        else if (block.google) onSelectGoogle(block.google);
         else if (block.session) onSelect(block.session);
         else if (block.routine) onSelectRoutine(block.routine);
     }
@@ -185,7 +205,7 @@ export default function WeeklyCalendar({
         setDraggingDue(null);
 
         if (due?.timed && due.task) onMoveDeadline(due.task, date, minutes);
-        else if (moved?.google) onMoveGoogle(moved.google, date, minutes);
+        else if (moved?.event) onMoveEvent(moved.event, date, minutes);
         else if (moved?.session) onMoveSession(moved.session, date, minutes);
         else if (moved?.routine) onMoveRoutine(moved.routine, date, minutes);
         else if (draggingTask) onDropTask(date, minutes);
@@ -262,7 +282,7 @@ export default function WeeklyCalendar({
 
         if (!due || due.timed) return;
         if (due.task) onMoveDeadline(due.task, date, null);
-        else if (due.event) onMoveGoogle(due.event, date, null);
+        else if (due.event) onMoveEvent(due.event, date, null);
     }
 
     // Keep the "now" line current, and catch up when the tab is shown again after being in the background.
@@ -349,17 +369,33 @@ export default function WeeklyCalendar({
                                 {items.length > 2 && (
                                     <p className="px-1 text-[10px] text-[var(--pm-muted)]" title={items.slice(2).map(task => task.title).join(', ')}>+{items.length - 2} more</p>
                                 )}
+                                {ownAllDay(date).slice(0, 2).map(event => (
+                                    <button
+                                        key={`event-${event.id}`}
+                                        type="button"
+                                        onClick={() => onSelectEvent(event)}
+                                        draggable
+                                        onDragStart={drag => startDueDrag(drag, { event, timed: false }, event.title)}
+                                        onDragEnd={() => setDraggingDue(null)}
+                                        title={`${event.title} · All day · Drag to another day`}
+                                        aria-label={`All day: ${event.title}`}
+                                        className="pm-due w-full cursor-grab"
+                                        style={{ borderLeft: '3px solid #8b7bbf', background: '#f1edf8', color: 'var(--pm-text)' }}
+                                    >
+                                        <span className="pm-due__text">{event.title}</span>
+                                    </button>
+                                ))}
+                                {ownAllDay(date).length > 2 && (
+                                    <p className="px-1 text-[10px] text-[var(--pm-muted)]" title={ownAllDay(date).slice(2).map(event => event.title).join(', ')}>+{ownAllDay(date).length - 2} more events</p>
+                                )}
                                 {allDay.slice(0, 2).map(event => (
                                     <button
                                         key={event.id}
                                         type="button"
                                         onClick={() => onSelectGoogle(event)}
-                                        draggable
-                                        onDragStart={drag => startDueDrag(drag, { event, timed: false }, event.title)}
-                                        onDragEnd={() => setDraggingDue(null)}
-                                        title={`${event.title} · ${event.calendar} (Google Calendar) · Drag to another day`}
+                                        title={`${event.title} · ${event.calendar} (Google Calendar preview)`}
                                         aria-label={`All day: ${event.title}, from Google Calendar`}
-                                        className="pm-due w-full cursor-grab"
+                                        className="pm-due w-full"
                                         style={{ borderLeft: `3px solid ${event.color ?? 'var(--pm-muted)'}` }}
                                     >
                                         <span className="pm-due__text"><span className="mr-1 font-semibold">G</span>{event.title}</span>
@@ -416,7 +452,9 @@ export default function WeeklyCalendar({
                             {dayLayout(blocks, date, timezone).map(({ session: block, start, end, lane, laneCount }) => {
                                 const overlapping = conflicts.has(block.key);
                                 const range = `${timeLabel(block.starts_at, timezone)} to ${timeLabel(block.ends_at, timezone)}`;
-                                const palette = block.google
+                                const palette = block.event
+                                    ? 'border-[#d4cbe6] bg-[#f1edf8] text-[var(--pm-text)]'
+                                    : block.google
                                     ? 'border-[#d3d6d9] bg-[#f1f3f4] text-[var(--pm-text)]'
                                     : block.routine
                                     ? 'border-[#c3d5e6] bg-[#eaf1f8] text-[var(--pm-text)]'
@@ -427,7 +465,7 @@ export default function WeeklyCalendar({
                                         key={block.key}
                                         role="button"
                                         tabIndex={0}
-                                        draggable
+                                        draggable={!block.google}
                                         onClick={() => select(block)}
                                         onKeyDown={event => {
                                             if (event.key === 'Enter' || event.key === ' ') {
@@ -446,16 +484,16 @@ export default function WeeklyCalendar({
                                             setDraggingBlock(null);
                                             setHover(null);
                                         }}
-                                        title={`${block.title} · ${range.replace(' to ', '–')}${block.routine ? ' · Repeats' : ''}${block.google ? ' · Google Calendar · Drag to move' : ''}${overlapping ? ' · Overlap' : ''}`}
+                                        title={`${block.title} · ${range.replace(' to ', '–')}${block.routine ? ' · Repeats' : ''}${block.event ? ' · Event' : ''}${block.google ? ' · Google Calendar preview' : ''}${overlapping ? ' · Overlap' : ''}`}
                                         aria-label={`${block.title}, ${range}${block.routine ? ', repeats' : ''}${block.google ? ', from Google Calendar' : ''}${overlapping ? ', overlaps another event' : ''}`}
-                                        className={`pm-calendar-session absolute cursor-grab overflow-hidden rounded-lg border px-1.5 py-1 text-left text-[10px] leading-tight ${draggingBlock?.block.key === block.key ? 'opacity-40' : ''} ${popping.has(signature(block)) ? 'pm-pop' : ''} ${palette} ${overlapping ? '!border-amber-600' : ''}`}
+                                        className={`pm-calendar-session absolute ${block.google ? 'cursor-pointer' : 'cursor-grab'} overflow-hidden rounded-lg border px-1.5 py-1 text-left text-[10px] leading-tight ${draggingBlock?.block.key === block.key ? 'opacity-40' : ''} ${popping.has(signature(block)) ? 'pm-pop' : ''} ${palette} ${overlapping ? '!border-amber-600' : ''}`}
                                         style={{
                                             top: start / 60 * HOUR_HEIGHT,
                                             height: Math.max(18, (end - start) / 60 * HOUR_HEIGHT - 2),
                                             left: `calc(${lane / laneCount * 100}% + 2px)`,
                                             width: `calc(${100 / laneCount}% - 4px)`,
                                             borderLeftWidth: 3,
-                                            borderLeftColor: overlapping ? '#b45309' : block.color ?? 'var(--pm-accent)',
+                                            borderLeftColor: overlapping ? '#b45309' : block.event ? '#8b7bbf' : block.color ?? 'var(--pm-accent)',
                                         }}
                                     >
                                         <span className={`block truncate font-semibold ${block.completed ? 'line-through' : ''}`}>{block.routine && '↻ '}{block.google && <span className="mr-1 text-[var(--pm-muted)]">G</span>}{block.title}</span>

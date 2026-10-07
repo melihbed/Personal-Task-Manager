@@ -1,5 +1,5 @@
 import { compareDue, dueDay, dueState } from './deadlines';
-import { addDays, zonedParts, type GoogleEvent, type PlannerSession, type PlannerTask, type RoutineOccurrence } from './planner';
+import { addDays, zonedParts, type GoogleEvent, type PlannerEvent, type PlannerSession, type PlannerTask, type RoutineOccurrence } from './planner';
 
 const HOURS_48 = 48 * 60 * 60 * 1000;
 
@@ -38,6 +38,7 @@ export function buildAttention(tasks: PlannerTask[], now: Date, timezone: string
 
 export type AgendaSource =
     | { kind: 'event'; event: GoogleEvent }
+    | { kind: 'appEvent'; event: PlannerEvent }
     | { kind: 'session'; session: PlannerSession }
     | { kind: 'routine'; occurrence: RoutineOccurrence }
     | { kind: 'deadline'; task: PlannerTask };
@@ -57,12 +58,12 @@ export type AgendaItem = {
 };
 
 /**
- * What is on today, in order: all-day items first, then by start time. It merges Google events, planned work
+ * What is on today, in order: all-day items first, then by start time. It merges the app's events, the Google preview, planned work
  * sessions, routine occurrences and deadlines that fall later today. Finished sessions and routines, and
  * deadlines already past (they show as overdue), are left out.
  */
 export function buildAgenda(
-    input: { events: GoogleEvent[]; sessions: PlannerSession[]; routines: RoutineOccurrence[]; tasks: PlannerTask[] },
+    input: { events: GoogleEvent[]; appEvents: PlannerEvent[]; sessions: PlannerSession[]; routines: RoutineOccurrence[]; tasks: PlannerTask[] },
     now: Date,
     timezone: string,
 ): AgendaItem[] {
@@ -79,6 +80,16 @@ export function buildAgenda(
             }
         } else if (event.starts_at && event.ends_at && overlapsToday(event.starts_at, event.ends_at)) {
             items.push({ key: `event:${event.id}`, title: event.title, detail: event.calendar, color: event.color, startsAt: event.starts_at, endsAt: event.ends_at, allDay: false, when: whenOf(event.starts_at, event.ends_at), source: { kind: 'event', event } });
+        }
+    }
+
+    for (const event of input.appEvents) {
+        if (event.all_day) {
+            if (event.start_date && event.end_date && event.start_date <= today && today <= event.end_date) {
+                items.push({ key: `appEvent:${event.id}`, title: event.title, detail: event.location ?? 'Event', color: '#8b7bbf', startsAt: null, endsAt: null, allDay: true, when: 'later', source: { kind: 'appEvent', event } });
+            }
+        } else if (event.starts_at && event.ends_at && overlapsToday(event.starts_at, event.ends_at)) {
+            items.push({ key: `appEvent:${event.id}`, title: event.title, detail: event.location ?? 'Event', color: '#8b7bbf', startsAt: event.starts_at, endsAt: event.ends_at, allDay: false, when: whenOf(event.starts_at, event.ends_at), source: { kind: 'appEvent', event } });
         }
     }
 

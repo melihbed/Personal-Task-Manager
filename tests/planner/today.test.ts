@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import type { GoogleEvent, PlannerSession, PlannerTask, RoutineOccurrence } from '../../resources/js/lib/planner';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { GoogleEvent, PlannerEvent, PlannerSession, PlannerTask, RoutineOccurrence } from '../../resources/js/lib/planner';
 import { buildAgenda, buildAttention, isPlanned } from '../../resources/js/lib/today';
 
 // Wednesday 2026-10-07, 1:40 PM in New York (17:40 UTC).
 const now = new Date('2026-10-07T17:40:00Z');
 const zone = 'America/New_York';
+
+// The deadline helpers read the real clock, so it is held at `now` for every test.
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(now); });
+afterEach(() => { vi.useRealTimers(); });
 
 const task = (id: number, due_at: string | null, overrides: Partial<PlannerTask> = {}): PlannerTask => ({
     id, responsibility_id: null, title: `Task ${id}`, notes: null, priority: 'normal', estimate_minutes: null,
@@ -78,7 +82,11 @@ const event = (id: string, overrides: Partial<GoogleEvent> = {}): GoogleEvent =>
 });
 const session = (id: number, starts_at: string, ends_at: string, completed = false): PlannerSession => ({ id, task_id: id, title: `Session ${id}`, responsibility_name: 'School', color: null, completed, starts_at, ends_at });
 const occurrence = (id: number, starts_at: string, ends_at: string, completed = false): RoutineOccurrence => ({ routine_id: id, occurs_on: '2026-10-07', title: `Routine ${id}`, responsibility_name: 'Home', color: null, starts_at, ends_at, completed, moved: false });
-const agenda = (input: Partial<Parameters<typeof buildAgenda>[0]>, at = now, zoneName = zone) => buildAgenda({ events: [], sessions: [], routines: [], tasks: [], ...input }, at, zoneName);
+const appEvent = (id: number, overrides: Partial<PlannerEvent> = {}): PlannerEvent => ({
+    id, title: `Own ${id}`, location: null, notes: null, responsibility_id: null, all_day: false,
+    starts_at: '2026-10-07T21:00:00Z', ends_at: '2026-10-07T22:00:00Z', start_date: null, end_date: null, ...overrides,
+});
+const agenda = (input: Partial<Parameters<typeof buildAgenda>[0]>, at = now, zoneName = zone) => buildAgenda({ events: [], appEvents: [], sessions: [], routines: [], tasks: [], ...input }, at, zoneName);
 
 describe('buildAgenda', () => {
     it('merges events, sessions, routines and later deadlines in time order, all-day first', () => {
@@ -126,4 +134,20 @@ describe('buildAgenda', () => {
 
         expect(agenda({ events: [overnight] }).map(item => item.when)).toEqual(['past']);
     });
+
+    it('includes the app\'s own events, with their place, timed and all-day', () => {
+        const items = agenda({ appEvents: [
+            appEvent(1, { location: 'Main St clinic' }),
+            appEvent(2, { all_day: true, starts_at: null, ends_at: null, start_date: '2026-10-06', end_date: '2026-10-07' }),
+            appEvent(3, { all_day: true, starts_at: null, ends_at: null, start_date: '2026-10-08', end_date: '2026-10-08' }),
+            appEvent(4, { starts_at: '2026-10-08T15:00:00Z', ends_at: '2026-10-08T16:00:00Z' }),
+        ] });
+
+        expect(items.map(item => [item.key, item.detail, item.allDay])).toEqual([['appEvent:2', 'Event', true], ['appEvent:1', 'Main St clinic', false]]);
+    });
+
+    it('marks an own event that is happening now', () => {
+        expect(agenda({ appEvents: [appEvent(1, { starts_at: '2026-10-07T17:00:00Z', ends_at: '2026-10-07T18:00:00Z' })] })[0].when).toBe('now');
+    });
 });
+

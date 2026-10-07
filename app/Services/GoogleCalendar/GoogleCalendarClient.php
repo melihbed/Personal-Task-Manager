@@ -50,12 +50,12 @@ class GoogleCalendarClient
      *
      * @return list<array<string, mixed>>
      */
-    public function events(string $calendarId, CarbonInterface $from, CarbonInterface $to): array
+    public function events(string $calendarId, CarbonInterface $from, CarbonInterface $to, int $maxPages = 4): array
     {
         $items = [];
         $pageToken = null;
 
-        for ($page = 0; $page < 4; $page++) {
+        for ($page = 0; $page < $maxPages; $page++) {
             $response = $this->send(fn (PendingRequest $request) => $request->get('/calendars/'.rawurlencode($calendarId).'/events', array_filter([
                 'timeMin' => $from->utc()->toIso8601String(),
                 'timeMax' => $to->utc()->toIso8601String(),

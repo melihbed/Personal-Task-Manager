@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 class GoogleImportController extends Controller
 {
     /**
-     * Copy one Google event into the planner as a task, a work session or a routine.
+     * Copy one Google event into the planner as an event, a task, a work session or a routine.
      */
     public function store(ImportGoogleEventRequest $request, GoogleEventImporter $importer): RedirectResponse
     {
@@ -53,7 +53,9 @@ class GoogleImportController extends Controller
         $responsibilityId = $data['responsibility_id'] ?? null;
 
         try {
-            if ($data['type'] === 'task') {
+            if ($data['type'] === 'event') {
+                $importer->asEvent($user, $calendarId, $event, $responsibilityId);
+            } elseif ($data['type'] === 'task') {
                 $importer->asTask($user, $calendarId, $event, $responsibilityId);
             } elseif ($data['type'] === 'session') {
                 $importer->asSession($user, $calendarId, $event, $responsibilityId);
@@ -64,7 +66,7 @@ class GoogleImportController extends Controller
             throw ValidationException::withMessages(['type' => $exception->getMessage()]);
         }
 
-        $label = ['task' => 'a task', 'session' => 'a work session', 'routine' => 'a routine'][$data['type']];
+        $label = ['event' => 'an event', 'task' => 'a task', 'session' => 'a work session', 'routine' => 'a routine'][$data['type']];
         $title = trim((string) ($event['summary'] ?? '')) ?: '(No title)';
 
         return back()->with('status', "Added “{$title}” as {$label}.");

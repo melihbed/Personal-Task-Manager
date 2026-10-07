@@ -20,8 +20,8 @@ class StoreCalendarItemRequest extends FormRequest
      * Get the validation rules that apply to the request.
      *
      * Made from a click-and-drag on the calendar: starts_at and ends_at (each with a UTC offset) are the dragged range.
-     * A task can reserve that time as a work session and take its end as the deadline; an event is added to Google
-     * Calendar; a routine repeats on the chosen ISO weekdays (1 = Monday ... 7 = Sunday) at the range's time of day.
+     * A task can reserve that time as a work session and take its end as the deadline; an event is a block of time with
+     * an optional place; a routine repeats on the chosen ISO weekdays (1 = Monday ... 7 = Sunday) at the range's time of day.
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
@@ -44,7 +44,7 @@ class StoreCalendarItemRequest extends FormRequest
             'reserve' => ['nullable', Rule::requiredIf($type === 'task'), 'boolean'],
             'deadline_at_end' => ['nullable', 'boolean'],
             'allow_overlap' => ['nullable', 'boolean'],
-            'calendar_id' => ['nullable', 'string', 'max:255'],
+            'location' => ['nullable', 'string', 'max:255'],
             'days' => [Rule::requiredIf($type === 'routine'), 'array', 'min:1', 'max:7'],
             'days.*' => ['integer', 'between:1,7', 'distinct'],
             'ends_on' => ['nullable', 'date_format:Y-m-d'],

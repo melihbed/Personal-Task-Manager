@@ -25,12 +25,8 @@ class UpdateGoogleCalendarRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'calendar_id' => ['required', 'string', 'max:255'],
             'import_calendar_ids' => ['present', 'array', 'max:20'],
             'import_calendar_ids.*' => ['string', 'max:255', 'distinct'],
-            'push_sessions' => ['required', 'boolean'],
-            'push_routines' => ['required', 'boolean'],
-            'push_deadlines' => ['required', 'boolean'],
         ];
     }
 }

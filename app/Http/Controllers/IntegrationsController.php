@@ -25,7 +25,7 @@ class IntegrationsController extends Controller
                 [
                     'key' => 'google-calendar',
                     'name' => 'Google Calendar',
-                    'description' => 'Show your Google events next to your plan, and add your work sessions, routines and deadlines to Google Calendar.',
+                    'description' => 'Move your Google Calendar into this app as your own events and routines. Read-only: nothing in Google is ever changed.',
                     'icon' => GoogleCalendarBranding::icon(),
                     'legal' => GoogleCalendarBranding::LEGAL,
                     'href' => route('google.show'),

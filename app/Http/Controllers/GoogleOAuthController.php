@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\GoogleAccount;
-use App\Services\GoogleCalendar\GoogleSyncDispatcher;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Laravel\Socialite\Facades\Socialite;
@@ -11,9 +10,9 @@ use Throwable;
 
 class GoogleOAuthController extends Controller
 {
-    /** Read and write events, and list calendars. Nothing broader. */
+    /** Read events, and list calendars. The app never writes to Google, so it never asks to. */
     private const SCOPES = [
-        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar.events.readonly',
         'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
     ];
 
@@ -23,7 +22,7 @@ class GoogleOAuthController extends Controller
             return redirect()->route('google.show')->with('status', 'Google Calendar is not set up yet. Add the Google client ID and secret first.');
         }
 
-        // offline + consent make Google return a refresh token, so syncing keeps working after the first hour.
+        // offline + consent make Google return a refresh token, so the connection keeps working after the first hour.
         return Socialite::driver('google')
             ->scopes(self::SCOPES)
             ->with(['access_type' => 'offline', 'prompt' => 'consent'])
@@ -49,11 +48,7 @@ class GoogleOAuthController extends Controller
         }
 
         $user = $request->user();
-        $account = $user->googleAccount ?? new GoogleAccount([
-            'calendar_id' => 'primary',
-            'calendar_name' => 'Primary calendar',
-            'import_calendar_ids' => ['primary'],
-        ]);
+        $account = $user->googleAccount ?? new GoogleAccount(['import_calendar_ids' => ['primary']]);
 
         $account->fill([
             'email' => $google->getEmail(),
@@ -65,8 +60,6 @@ class GoogleOAuthController extends Controller
         ]);
         $account->user()->associate($user);
         $account->save();
-
-        GoogleSyncDispatcher::all($user, ['session', 'deadline', 'routine']);
 
         return redirect()->route('google.show')->with('status', 'Google Calendar connected.');
     }

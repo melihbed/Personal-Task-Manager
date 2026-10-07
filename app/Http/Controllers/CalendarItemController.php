@@ -3,11 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreCalendarItemRequest;
+use App\Models\CalendarEvent;
 use App\Models\CalendarSession;
 use App\Models\Routine;
 use App\Models\Task;
-use App\Services\GoogleCalendar\EventActionFailed;
-use App\Services\GoogleCalendar\GoogleEventManager;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -16,9 +15,9 @@ use Illuminate\Validation\ValidationException;
 class CalendarItemController extends Controller
 {
     /**
-     * Adds a task, a Google Calendar event or a routine from a range dragged on the calendar.
+     * Adds a task, an event or a routine from a range dragged on the calendar.
      */
-    public function store(StoreCalendarItemRequest $request, GoogleEventManager $events): RedirectResponse
+    public function store(StoreCalendarItemRequest $request): RedirectResponse
     {
         $data = $request->validated();
         $start = CarbonImmutable::parse($data['starts_at'])->utc();
@@ -30,7 +29,7 @@ class CalendarItemController extends Controller
 
         $message = match ($data['type']) {
             'task' => $this->task($request, $data, $start, $end),
-            'event' => $this->event($request, $events, $data),
+            'event' => $this->event($request, $data, $start, $end),
             'routine' => $this->routine($request, $data, $start, $end),
         };
 
@@ -73,25 +72,24 @@ class CalendarItemController extends Controller
     }
 
     /**
-     * A new event in the user's Google Calendar.
+     * A new event of the app's own, at the dragged time.
      *
      * @param  array<string, mixed>  $data
      */
-    private function event(StoreCalendarItemRequest $request, GoogleEventManager $events, array $data): string
+    private function event(StoreCalendarItemRequest $request, array $data, CarbonImmutable $start, CarbonImmutable $end): string
     {
-        $account = $request->user()->googleAccount;
+        $event = new CalendarEvent([
+            'title' => $data['title'],
+            'location' => filled($data['location'] ?? null) ? trim($data['location']) : null,
+            'all_day' => false,
+            'starts_at' => $start,
+            'ends_at' => $end,
+        ]);
+        $event->user()->associate($request->user());
+        $event->responsibility_id = $data['responsibility_id'] ?? null;
+        $event->save();
 
-        if ($account === null || $account->needs_reconnect) {
-            throw ValidationException::withMessages(['type' => 'Connect Google Calendar to add events.']);
-        }
-
-        try {
-            $events->create($account, $data['calendar_id'] ?? null, $data);
-        } catch (EventActionFailed $exception) {
-            throw ValidationException::withMessages(['type' => $exception->getMessage()]);
-        }
-
-        return 'Added to Google Calendar.';
+        return 'Event added.';
     }
 
     /**

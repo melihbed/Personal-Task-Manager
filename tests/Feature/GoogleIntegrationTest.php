@@ -1,14 +1,11 @@
 <?php
 
-use App\Jobs\RemoveGoogleEvents;
-use App\Jobs\SyncGoogleItem;
 use App\Models\GoogleAccount;
 use App\Models\User;
 use App\Services\GoogleCalendar\GoogleCalendarBranding;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\User as SocialiteUser;
@@ -46,7 +43,7 @@ describe('connecting', function () {
             ->assertSessionHas('status');
     });
 
-    test('connecting sends the user to Google asking for offline access to events only', function () {
+    test('connecting sends the user to Google asking for offline, read-only access to events', function () {
         configureGoogle();
 
         $response = $this->actingAs(User::factory()->create())->get('/integrations/google/redirect');
@@ -56,16 +53,15 @@ describe('connecting', function () {
         expect($url)->toStartWith('https://accounts.google.com/o/oauth2/auth')
             ->toContain('access_type=offline')
             ->toContain('prompt=consent')
-            ->toContain('https://www.googleapis.com/auth/calendar.events')
+            ->toContain('https://www.googleapis.com/auth/calendar.events.readonly')
             ->toContain('https://www.googleapis.com/auth/calendar.calendarlist.readonly')
+            ->not->toMatch('#auth/calendar\.events(?!\.readonly)#')
             ->not->toContain('auth/calendar ');
     });
 
-    test('the callback saves encrypted tokens for the signed in user and starts a sync', function () {
+    test('the callback saves encrypted tokens for the signed in user', function () {
         configureGoogle();
         $user = User::factory()->create();
-        $user->tasks()->create(['title' => 'Call', 'priority' => 'normal', 'due_at' => '2026-10-07T18:00:00Z']);
-        Queue::fake();
         Socialite::fake('google', googleProfile());
 
         $this->actingAs($user)->get('/integrations/google/callback?code=abc')
@@ -77,23 +73,18 @@ describe('connecting', function () {
         expect($account->email)->toBe('me@example.com')
             ->and($account->access_token)->toBe('new-access')
             ->and($account->refresh_token)->toBe('new-refresh')
-            ->and($account->calendar_id)->toBe('primary')
             ->and($account->import_calendar_ids)->toBe(['primary'])
             ->and($account->needs_reconnect)->toBeFalse()
             ->and(DB::table('google_accounts')->value('access_token'))->not->toBe('new-access')
             ->and(DB::table('google_accounts')->value('refresh_token'))->not->toBe('new-refresh');
-
-        Queue::assertPushed(SyncGoogleItem::class, fn (SyncGoogleItem $job) => $job->kind === 'deadline' && $job->userId === $user->id);
     });
 
-    test('reconnecting keeps the chosen calendar and the old refresh token when Google sends none', function () {
+    test('reconnecting keeps the chosen calendars and the old refresh token when Google sends none', function () {
         configureGoogle();
         $user = User::factory()->create();
         $user->googleAccount()->create([
-            'access_token' => 'stale', 'refresh_token' => 'old-refresh', 'calendar_id' => 'cal-1',
-            'calendar_name' => 'Planner', 'import_calendar_ids' => ['cal-1'], 'needs_reconnect' => true,
+            'access_token' => 'stale', 'refresh_token' => 'old-refresh', 'import_calendar_ids' => ['cal-1'], 'needs_reconnect' => true,
         ]);
-        Queue::fake();
         Socialite::fake('google', googleProfile(null));
 
         $this->actingAs($user)->get('/integrations/google/callback?code=abc');
@@ -102,7 +93,6 @@ describe('connecting', function () {
 
         expect($account->access_token)->toBe('new-access')
             ->and($account->refresh_token)->toBe('old-refresh')
-            ->and($account->calendar_id)->toBe('cal-1')
             ->and($account->import_calendar_ids)->toBe(['cal-1'])
             ->and($account->needs_reconnect)->toBeFalse();
     });
@@ -247,7 +237,7 @@ describe('settings', function () {
         $this->actingAs($user)->get('/integrations/google')
             ->assertInertia(fn (Assert $page) => $page
                 ->where('account.email', 'me@example.com')
-                ->where('account.calendar_id', 'cal-1')
+                ->where('account.import_calendar_ids', ['primary'])
                 ->missing('account.access_token')
                 ->missing('account.refresh_token')
                 ->loadDeferredProps(fn (Assert $loaded) => $loaded->has('calendars', 3)->where('calendars.1.name', 'Planner')));
@@ -260,111 +250,63 @@ describe('settings', function () {
 
     function settingsPayload(array $overrides = []): array
     {
-        return array_merge([
-            'calendar_id' => 'cal-1',
-            'import_calendar_ids' => ['primary-id'],
-            'push_sessions' => true,
-            'push_routines' => true,
-            'push_deadlines' => true,
-        ], $overrides);
+        return array_merge(['import_calendar_ids' => ['primary-id']], $overrides);
     }
 
-    test('settings are saved with the calendar name from Google', function () {
+    test('the previewed calendars are saved', function () {
         fakeGoogle();
-        $user = googleUser(['calendar_id' => 'primary-id', 'calendar_name' => 'Me']);
-        Queue::fake();
+        $user = googleUser();
 
         $this->actingAs($user)->patch('/integrations/google', settingsPayload(['import_calendar_ids' => ['primary-id', 'holidays']]))
             ->assertSessionHasNoErrors();
 
-        $account = $user->googleAccount()->first();
-
-        expect($account->calendar_id)->toBe('cal-1')
-            ->and($account->calendar_name)->toBe('Planner')
-            ->and($account->import_calendar_ids)->toBe(['primary-id', 'holidays']);
+        expect($user->googleAccount()->first()->import_calendar_ids)->toBe(['primary-id', 'holidays']);
     });
 
-    test('settings reject calendars that are not in the users own list', function (array $overrides, string $field) {
+    test('the previewed calendars can be switched off completely', function () {
         fakeGoogle();
         $user = googleUser();
 
-        $this->actingAs($user)->patch('/integrations/google', settingsPayload($overrides))->assertSessionHasErrors($field);
+        $this->actingAs($user)->patch('/integrations/google', ['import_calendar_ids' => []])->assertSessionHasNoErrors();
+
+        expect($user->googleAccount()->first()->import_calendar_ids)->toBe([]);
+    });
+
+    test('the primary alias is saved as the real calendar id', function () {
+        fakeGoogle();
+        $user = googleUser();
+
+        $this->actingAs($user)->patch('/integrations/google', settingsPayload(['import_calendar_ids' => ['primary']]));
+
+        expect($user->googleAccount()->first()->import_calendar_ids)->toBe(['primary-id']);
+    });
+
+    test('settings reject calendars that are not in the users own list', function () {
+        fakeGoogle();
+
+        $this->actingAs(googleUser())->patch('/integrations/google', settingsPayload(['import_calendar_ids' => ['nope']]))->assertSessionHasErrors('import_calendar_ids');
+    });
+
+    test('settings reject malformed input', function (array $payload, string $field) {
+        fakeGoogle();
+
+        $this->actingAs(googleUser())->patch('/integrations/google', $payload)->assertSessionHasErrors($field);
     })->with([
-        'a calendar that does not exist' => [['calendar_id' => 'someone-elses'], 'calendar_id'],
-        'a calendar that is read only' => [['calendar_id' => 'holidays'], 'calendar_id'],
-        'an import calendar that does not exist' => [['import_calendar_ids' => ['nope']], 'import_calendar_ids'],
+        'no list of calendars' => [[], 'import_calendar_ids'],
+        'duplicate calendars' => [['import_calendar_ids' => ['primary-id', 'primary-id']], 'import_calendar_ids.0'],
     ]);
 
-    test('settings reject malformed input', function (array $overrides, string $field) {
-        fakeGoogle();
-
-        $this->actingAs(googleUser())->patch('/integrations/google', settingsPayload($overrides))->assertSessionHasErrors($field);
-    })->with([
-        'no calendar' => [['calendar_id' => ''], 'calendar_id'],
-        'a switch that is not a boolean' => [['push_sessions' => 'maybe'], 'push_sessions'],
-        'duplicate import calendars' => [['import_calendar_ids' => ['primary-id', 'primary-id']], 'import_calendar_ids.0'],
-    ]);
-
-    test('flipping a switch syncs only that kind of item', function () {
+    test('the app never writes to Google, so connecting asks for no write access and nothing is ever sent', function () {
         fakeGoogle();
         $user = googleUser();
         plannedSession($user);
+        weeklyRoutine($user);
         $user->tasks()->create(['title' => 'Call', 'priority' => 'normal', 'due_at' => '2026-10-07T18:00:00Z']);
-        weeklyRoutine($user);
-        Queue::fake();
 
-        $this->actingAs($user)->patch('/integrations/google', settingsPayload(['push_deadlines' => false]))->assertSessionHasNoErrors();
-
-        Queue::assertPushed(SyncGoogleItem::class, 1);
-        Queue::assertPushed(SyncGoogleItem::class, fn (SyncGoogleItem $job) => $job->kind === 'deadline');
+        expect(googleWrites())->toHaveCount(0)->and(collect(Http::recorded())->filter(fn ($pair) => str_contains($pair[0]->url(), 'googleapis.com/calendar')))->toHaveCount(0);
     });
 
-    test('changing the target calendar syncs everything again', function () {
-        fakeGoogle();
-        $user = googleUser(['calendar_id' => 'primary-id']);
-        plannedSession($user);
-        $user->tasks()->create(['title' => 'Call', 'priority' => 'normal', 'due_at' => '2026-10-07T18:00:00Z']);
-        weeklyRoutine($user);
-        Queue::fake();
-
-        $this->actingAs($user)->patch('/integrations/google', settingsPayload())->assertSessionHasNoErrors();
-
-        Queue::assertPushed(SyncGoogleItem::class, 3);
-    });
-
-    test('saving settings that change nothing syncs nothing', function () {
-        fakeGoogle();
-        $user = googleUser();
-        plannedSession($user);
-        Queue::fake();
-
-        $this->actingAs($user)->patch('/integrations/google', settingsPayload())->assertSessionHasNoErrors();
-
-        Queue::assertNothingPushed();
-    });
-
-    test('syncing now queues every item, and removing events queues the removal', function () {
-        fakeGoogle();
-        $user = googleUser();
-        plannedSession($user);
-        weeklyRoutine($user);
-        Queue::fake();
-
-        $this->actingAs($user)->post('/integrations/google/sync')->assertSessionHas('status');
-        Queue::assertPushed(SyncGoogleItem::class, 2);
-
-        $this->actingAs($user)->delete('/integrations/google/sync')->assertSessionHas('status');
-        Queue::assertPushed(RemoveGoogleEvents::class, fn (RemoveGoogleEvents $job) => $job->userId === $user->id);
-    });
-
-    test('syncing and removing need a connected account', function () {
-        $user = User::factory()->create();
-
-        $this->actingAs($user)->post('/integrations/google/sync')->assertNotFound();
-        $this->actingAs($user)->delete('/integrations/google/sync')->assertNotFound();
-    });
-
-    test('disconnecting revokes access and forgets the account and its links, leaving Google events alone', function () {
+    test('disconnecting revokes access and forgets the account, leaving Google events alone', function () {
         fakeGoogle();
         $user = googleUser();
         plannedSession($user);
@@ -374,7 +316,6 @@ describe('settings', function () {
             ->assertSessionHas('status', 'Google Calendar disconnected.');
 
         expect(GoogleAccount::count())->toBe(0)
-            ->and($user->googleEventLinks()->count())->toBe(0)
             ->and(collect(Http::recorded())->filter(fn ($pair) => str_contains($pair[0]->url(), 'oauth2.googleapis.com/revoke')))->toHaveCount(1)
             ->and(googleCalls('DELETE'))->toHaveCount(0);
     });

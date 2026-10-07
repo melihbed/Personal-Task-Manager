@@ -1,4 +1,4 @@
-import { Link, router } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { addDays, dateLabel, localToISO } from '../lib/planner';
 import { clock24 } from '../lib/calendar-moves';
@@ -11,7 +11,6 @@ type Props = {
     anchor: DOMRect;
     timezone: string;
     responsibilities: { id: number; name: string }[];
-    googleConnected: boolean;
     onClose: () => void;
 };
 
@@ -23,9 +22,9 @@ const firstError = (errors: Record<string, string>) => Object.values(errors)[0];
 
 /**
  * The form that opens beside a range dragged on the calendar, like Google Calendar's: a title, then what it is. A task can
- * reserve that time for working on it; an event goes to Google Calendar; a routine repeats on chosen weekdays.
+ * reserve that time for working on it; an event is a block of time with an optional place; a routine repeats on chosen weekdays.
  */
-export default function CreateItemPopover({ range, anchor, timezone, responsibilities, googleConnected, onClose }: Props) {
+export default function CreateItemPopover({ range, anchor, timezone, responsibilities, onClose }: Props) {
     const panel = useRef<HTMLFormElement>(null);
     const [kind, setKind] = useState<Kind>('task');
     const [title, setTitle] = useState('');
@@ -38,6 +37,7 @@ export default function CreateItemPopover({ range, anchor, timezone, responsibil
     const [responsibilityId, setResponsibilityId] = useState<number | null>(null);
     const [days, setDays] = useState<number[]>([isoWeekday(range.date)]);
     const [endsOn, setEndsOn] = useState('');
+    const [location, setLocation] = useState('');
     const [allowOverlap, setAllowOverlap] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
@@ -86,6 +86,7 @@ export default function CreateItemPopover({ range, anchor, timezone, responsibil
         const payload: Record<string, string | number | boolean | number[] | null> = { type: kind, title: title.trim(), starts_at: startsAt, ends_at: endsAt, timezone };
 
         if (kind === 'task') Object.assign(payload, { reserve, deadline_at_end: deadline, responsibility_id: responsibilityId, allow_overlap: allowOverlap });
+        if (kind === 'event') Object.assign(payload, { location: location.trim() === '' ? null : location.trim(), responsibility_id: responsibilityId });
         if (kind === 'routine') Object.assign(payload, { days, responsibility_id: responsibilityId, ends_on: endsOn === '' ? null : endsOn });
 
         setSaving(true);
@@ -100,7 +101,7 @@ export default function CreateItemPopover({ range, anchor, timezone, responsibil
 
     const needsOverlapOk = !!errors.allow_overlap;
     const other = Object.entries(errors).filter(([field]) => field !== 'allow_overlap').map(([, message]) => message);
-    const cannotSave = saving || (kind === 'event' && !googleConnected);
+    const cannotSave = saving;
 
     return (
         <form
@@ -159,9 +160,10 @@ export default function CreateItemPopover({ range, anchor, timezone, responsibil
             )}
 
             {kind === 'event' && (
-                googleConnected
-                    ? <p className="mt-4 text-sm text-[var(--pm-muted)]">Added to your Google Calendar, and shown here.</p>
-                    : <p className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-950">Events live in Google Calendar. <Link href="/integrations/google" className="pm-link">Connect it</Link> to add one.</p>
+                <div className="mt-4">
+                    <label htmlFor="create-location" className="sr-only">Place</label>
+                    <input id="create-location" value={location} maxLength={255} placeholder="Add place (optional)" onChange={(event) => setLocation(event.target.value)} className="pm-input pm-input--flush !py-2 text-sm" />
+                </div>
             )}
 
             {kind === 'routine' && (
@@ -178,7 +180,7 @@ export default function CreateItemPopover({ range, anchor, timezone, responsibil
                 </div>
             )}
 
-            {kind !== 'event' && (
+            {(
                 <label className="mt-4 flex items-center justify-between gap-3 text-sm">
                     Responsibility
                     <select value={responsibilityId ?? ''} onChange={(event) => setResponsibilityId(event.target.value === '' ? null : Number(event.target.value))} className="pm-input pm-input--flush w-auto max-w-48 cursor-pointer !py-2 text-sm">

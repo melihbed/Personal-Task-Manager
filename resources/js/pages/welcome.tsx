@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import AppLayout from '../../../resources/js/layouts/app-layout';
 import GoogleEventDialog from '../components/google-event-dialog';
 import CreateItemPopover from '../components/create-item-popover';
-import GoogleEventMoveDialog from '../components/google-event-move-dialog';
+import EventDialog from '../components/event-dialog';
 import TaskDetailsDialog from '../components/task-details-dialog';
 import ResponsibilityDialog from '../components/responsibility-dialog';
 import RoutineDialog from '../components/routine-dialog';
@@ -13,12 +13,11 @@ import TodayPanel from '../components/today/today-panel';
 import TasksCard from '../components/tasks/tasks-card';
 import WeeklyCalendar from '../../../resources/js/components/weekly-calendar';
 import ScheduleDialog from '../../../resources/js/components/schedule-dialog';
-import { movedDeadline, movedGoogleValues, taskUpdatePayload } from '../lib/calendar-moves';
-import type { EditValues } from '../lib/google-events';
-import { addDays, dateLabel, localToISO, overlaps, timeLabel, zonedParts, type GoogleEvent, type PlannerRoutine, type PlannerSession, type PlannerTask, type RoutineOccurrence } from '../lib/planner';
+import { eventUpdatePayload, movedDeadline, movedEvent, taskUpdatePayload } from '../lib/calendar-moves';
+import { addDays, dateLabel, localToISO, overlaps, timeLabel, zonedParts, type GoogleEvent, type PlannerEvent, type PlannerRoutine, type PlannerSession, type PlannerTask, type RoutineOccurrence } from '../lib/planner';
 
 type Responsibility = { id: number; name: string; description: string | null; color: string | null };
-type Props = { name: string; email: string; responsibilities: Responsibility[]; tasks: PlannerTask[]; sessions: PlannerSession[]; routines: PlannerRoutine[]; routineSessions: RoutineOccurrence[]; routinesToday: RoutineOccurrence[]; todaySessions?: PlannerSession[]; googleToday?: GoogleEvent[] | null; google?: { connected: boolean; needsReconnect: boolean }; googleEvents?: GoogleEvent[]; weekStart: string; timezone: string };
+type Props = { name: string; email: string; responsibilities: Responsibility[]; tasks: PlannerTask[]; sessions: PlannerSession[]; routines: PlannerRoutine[]; routineSessions: RoutineOccurrence[]; routinesToday: RoutineOccurrence[]; events?: PlannerEvent[]; todayEvents?: PlannerEvent[]; todaySessions?: PlannerSession[]; googleToday?: GoogleEvent[] | null; google?: { connected: boolean; needsReconnect: boolean }; googleEvents?: GoogleEvent[]; weekStart: string; timezone: string };
 
 const clock24 = (value: number) => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
 
@@ -71,6 +70,8 @@ export default function Welcome({
                                     routineSessions = [],
                                     routinesToday = [],
                                     google,
+                                    events = [],
+                                    todayEvents = [],
                                     todaySessions = [],
                                     googleToday,
                                     googleEvents,
@@ -97,7 +98,7 @@ export default function Welcome({
     const [selectedGoogleEvent, setSelectedGoogleEvent] = useState<GoogleEvent | null>(null);
     const [creating, setCreating] = useState<{ date: string; start: number; end: number; rect: DOMRect } | null>(null);
     const [detailsTask, setDetailsTask] = useState<PlannerTask | null>(null);
-    const [googleMove, setGoogleMove] = useState<{ event: GoogleEvent; values: EditValues } | null>(null);
+    const [selectedEvent, setSelectedEvent] = useState<PlannerEvent | null>(null);
     const [routineMove, setRoutineMove] = useState<{ occurrence: RoutineOccurrence; startsAt: string; endsAt: string } | null>(null);
     const editingRoutine = routineDialog?.id != null ? routines.find(routine => routine.id === routineDialog.id) : undefined;
     const [planDraft, setPlanDraft] = useState<{ task: PlannerTask; session?: PlannerSession; initial: { date: string; startTime: string; endDate: string; endTime: string } } | null>(null);
@@ -196,11 +197,13 @@ export default function Welcome({
 
         router.patch(`/tasks/${task.id}`, taskUpdatePayload(task, moved), { preserveScroll: true, onError: () => setDetailsTask(task) });
     }
-    /** A Google event was dragged to a new day (and time). Ask first, because it is saved to Google itself. */
-    function moveGoogle(event: GoogleEvent, date: string, minutes: number | null) {
-        const values = movedGoogleValues(event, date, minutes, timezone);
+    /** One of the app's events was dragged to a new day (and time). Only its time changes. */
+    function moveEvent(event: PlannerEvent, date: string, minutes: number | null) {
+        const times = movedEvent(event, date, minutes, timezone);
 
-        if (values) setGoogleMove({ event, values });
+        if (!times) return;
+
+        router.patch(`/events/${event.id}`, eventUpdatePayload(event, times), { preserveScroll: true, onError: () => setSelectedEvent(event) });
     }
     function navigate(week: string | null, zone = timezone) {
         router.get('/', { ...(week ? { week } : {}), timezone: zone }, { preserveScroll: true });
@@ -226,6 +229,7 @@ export default function Welcome({
                     tasks={tasks}
                     responsibilities={responsibilities}
                     sessions={todaySessions}
+                    appEvents={todayEvents}
                     routines={routinesToday}
                     events={google?.connected ? (googleToday === null ? googleEvents : googleToday) : []}
                     timezone={timezone}
@@ -233,6 +237,7 @@ export default function Welcome({
                     onSelectSession={setSelectedSession}
                     onSelectOccurrence={setSelectedOccurrence}
                     onSelectEvent={setSelectedGoogleEvent}
+                    onSelectAppEvent={setSelectedEvent}
                 />
                 <TasksCard
                     tasks={tasks}
@@ -249,7 +254,7 @@ export default function Welcome({
                     onSelectOccurrence={setSelectedOccurrence}
                 />
             </div>
-            <section className="min-w-0" aria-labelledby="week-title">{google?.needsReconnect && <p role="alert" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">Google Calendar needs to be connected again, so syncing is paused. <Link href="/integrations/google" className="pm-link">Fix it</Link></p>}<div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 id="week-title" className="text-lg font-medium">{dateLabel(weekStart, { month: 'short', day: 'numeric' })} – {dateLabel(weekEnd, { month: 'short', day: 'numeric', year: 'numeric' })}</h2><p className="mt-1 text-xs text-[var(--pm-muted)]">Monday–Sunday · Click a session to manage it</p></div><div className="pm-button-group"><button type="button" aria-label="Previous week" onClick={() => navigate(addDays(weekStart, -7))} className="pm-button pm-button--secondary pm-button--icon">‹</button><button type="button" onClick={() => navigate(null)} className="pm-button pm-button--secondary">Today</button><button type="button" aria-label="Next week" onClick={() => navigate(addDays(weekStart, 7))} className="pm-button pm-button--secondary pm-button--icon">›</button></div></div><WeeklyCalendar weekStart={weekStart} timezone={timezone} sessions={sessions} onSelect={setSelectedSession} deadlines={deadlines} onSelectDeadline={setDetailsTask} routineOccurrences={routineSessions} onSelectRoutine={setSelectedOccurrence} googleEvents={googleEvents ?? []} onSelectGoogle={setSelectedGoogleEvent} googleLoading={!!google?.connected && googleEvents === undefined} draggingTask={draggingTask} onDropTask={planByDrop} onMoveSession={moveSession} onMoveRoutine={moveRoutine} onMoveGoogle={moveGoogle} onMoveDeadline={moveDeadline} onCreateRange={setCreating} pendingRange={creating} />{sessions.length === 0 && <p className="mt-3 text-sm text-[var(--pm-muted)]">Your week is open. Drag a task here, or choose Plan beside it, to reserve time.</p>}</section>
+            <section className="min-w-0" aria-labelledby="week-title">{google?.needsReconnect && <p role="alert" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">Google Calendar needs to be connected again, so syncing is paused. <Link href="/integrations/google" className="pm-link">Fix it</Link></p>}<div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 id="week-title" className="text-lg font-medium">{dateLabel(weekStart, { month: 'short', day: 'numeric' })} – {dateLabel(weekEnd, { month: 'short', day: 'numeric', year: 'numeric' })}</h2><p className="mt-1 text-xs text-[var(--pm-muted)]">Monday–Sunday · Click a session to manage it</p></div><div className="pm-button-group"><button type="button" aria-label="Previous week" onClick={() => navigate(addDays(weekStart, -7))} className="pm-button pm-button--secondary pm-button--icon">‹</button><button type="button" onClick={() => navigate(null)} className="pm-button pm-button--secondary">Today</button><button type="button" aria-label="Next week" onClick={() => navigate(addDays(weekStart, 7))} className="pm-button pm-button--secondary pm-button--icon">›</button></div></div><WeeklyCalendar weekStart={weekStart} timezone={timezone} sessions={sessions} onSelect={setSelectedSession} deadlines={deadlines} onSelectDeadline={setDetailsTask} routineOccurrences={routineSessions} onSelectRoutine={setSelectedOccurrence} googleEvents={googleEvents ?? []} onSelectGoogle={setSelectedGoogleEvent} googleLoading={!!google?.connected && googleEvents === undefined} draggingTask={draggingTask} onDropTask={planByDrop} onMoveSession={moveSession} onMoveRoutine={moveRoutine} onMoveEvent={moveEvent} events={events} onSelectEvent={setSelectedEvent} onMoveDeadline={moveDeadline} onCreateRange={setCreating} pendingRange={creating} />{sessions.length === 0 && <p className="mt-3 text-sm text-[var(--pm-muted)]">Your week is open. Drag a task here, or choose Plan beside it, to reserve time.</p>}</section>
         </div>
         {routineDialog && (routineDialog.id === null || editingRoutine) && (
             <RoutineDialog
@@ -292,9 +297,9 @@ export default function Welcome({
         )}
         {responsibilityDialogOpen && <ResponsibilityDialog existingCount={responsibilities.length} onClose={() => setResponsibilityDialogOpen(false)} />}
         {planDraft && <ScheduleDialog key={`plan-${planDraft.session?.id ?? 'new'}-${planDraft.task.id}-${planDraft.initial.date}-${planDraft.initial.startTime}`} task={planDraft.task} session={planDraft.session} date={planDraft.initial.date} initial={planDraft.initial} timezone={timezone} sessions={sessions} onClose={() => setPlanDraft(null)} />}
-        {creating && <CreateItemPopover key={`${creating.date}-${creating.start}-${creating.end}`} range={creating} anchor={creating.rect} timezone={timezone} responsibilities={responsibilities} googleConnected={!!google?.connected && !google.needsReconnect} onClose={() => setCreating(null)} />}
+        {creating && <CreateItemPopover key={`${creating.date}-${creating.start}-${creating.end}`} range={creating} anchor={creating.rect} timezone={timezone} responsibilities={responsibilities} onClose={() => setCreating(null)} />}
         {detailsTask && <TaskDetailsDialog key={detailsTask.id} task={tasks.find(candidate => candidate.id === detailsTask.id) ?? detailsTask} responsibilities={responsibilities} timezone={timezone} onPlan={setSelectedTask} onClose={() => setDetailsTask(null)} />}
-        {googleMove && <GoogleEventMoveDialog key={`${googleMove.event.id}-${googleMove.values.startDate}-${googleMove.values.startTime}`} event={googleMove.event} values={googleMove.values} timezone={timezone} onClose={() => setGoogleMove(null)} />}
+        {selectedEvent && <EventDialog key={selectedEvent.id} event={events.find(candidate => candidate.id === selectedEvent.id) ?? selectedEvent} responsibilities={responsibilities} timezone={timezone} onClose={() => setSelectedEvent(null)} />}
         {selectedTask && <ScheduleDialog key={selectedTask.id} task={selectedTask} date={scheduleDate} timezone={timezone} sessions={sessions} onClose={() => setSelectedTask(null)} />}
         {selectedSession && (
             <SessionDialog

@@ -41,22 +41,6 @@ describe('adding an event as a task', function () {
             ->and($task->estimate_minutes)->toBeNull();
     });
 
-    test('a task copied from Google is never pushed back to Google', function () {
-        fakeGoogle(single: ['ev1' => timedEvent()]);
-        $user = importer(['calendar_id' => 'cal-1']);
-
-        $this->actingAs($user)->post('/integrations/google/imports', importPayload())->assertSessionHasNoErrors();
-        $task = $user->tasks()->firstOrFail();
-
-        // Changing it later triggers a sync, which must still send nothing.
-        $task->completed_at = now();
-        $task->save();
-        $task->completed_at = null;
-        $task->save();
-
-        expect(googleWrites())->toHaveCount(0)
-            ->and($user->googleEventLinks()->count())->toBe(0);
-    });
 });
 
 describe('adding an event as a work session', function () {
@@ -76,20 +60,6 @@ describe('adding an event as a work session', function () {
             ->and($session->starts_at->utc()->toIso8601String())->toBe('2026-10-07T19:00:00+00:00')
             ->and($session->ends_at->utc()->toIso8601String())->toBe('2026-10-07T20:30:00+00:00')
             ->and($user->googleEventImports()->firstOrFail()->only(['kind', 'item_id']))->toBe(['kind' => 'session', 'item_id' => $session->id]);
-    });
-
-    test('a session copied from Google is never pushed back to Google', function () {
-        fakeGoogle(single: ['ev1' => timedEvent()]);
-        $user = importer(['calendar_id' => 'cal-1']);
-
-        $this->actingAs($user)->post('/integrations/google/imports', importPayload(['type' => 'session']))->assertSessionHasNoErrors();
-        $session = CalendarSession::where('user_id', $user->id)->firstOrFail();
-
-        $session->starts_at = '2026-10-08 09:00:00';
-        $session->ends_at = '2026-10-08 10:00:00';
-        $session->save();
-
-        expect(googleWrites())->toHaveCount(0);
     });
 
     test('an all-day event cannot become a session', function () {
@@ -138,22 +108,6 @@ describe('making a routine from a repeating event', function () {
         $this->actingAs($user)->post('/integrations/google/imports', importPayload(['event_id' => 'series1_20261013T120000Z', 'type' => 'routine']))->assertSessionHasNoErrors();
 
         expect($user->routines()->firstOrFail()->ends_on->toDateString())->toBe('2026-12-21');
-    });
-
-    test('a routine copied from Google is never pushed back to Google', function () {
-        fakeGoogle(single: ['series1_20261013T120000Z' => seriesInstance(), 'series1' => seriesMaster()]);
-        $user = importer(['calendar_id' => 'cal-1']);
-
-        $this->actingAs($user)->post('/integrations/google/imports', importPayload(['event_id' => 'series1_20261013T120000Z', 'type' => 'routine']))->assertSessionHasNoErrors();
-        $routine = $user->routines()->firstOrFail();
-
-        $this->actingAs($user)->patch("/routines/{$routine->id}", [
-            'title' => 'Cook breakfast', 'days' => [2], 'start_time' => '07:30', 'duration_minutes' => 30,
-            'timezone' => 'America/New_York', 'starts_on' => '2026-10-06', 'ends_on' => null,
-        ])->assertSessionHasNoErrors();
-        $routine->occurrences()->create(['occurs_on' => '2026-10-13', 'skipped' => true]);
-
-        expect(googleWrites())->toHaveCount(0);
     });
 
     test('rules a routine cannot express are refused and nothing is created', function (array $recurrence, string $message) {

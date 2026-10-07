@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\GoogleEventImport;
 use App\Models\User;
 
 function taskPayload(array $overrides = []): array
@@ -112,56 +111,5 @@ describe('editing a task', function () {
         $user->tasks()->create(['title' => 'Report', 'priority' => 'normal', 'notes' => 'Use the template.']);
 
         $this->actingAs($user)->get('/')->assertInertia(fn ($page) => $page->where('tasks.0.notes', 'Use the template.'));
-    });
-});
-
-describe('editing a task keeps Google Calendar in step', function () {
-    test('moving the deadline patches its Google event', function () {
-        fakeGoogle();
-        $user = googleUser();
-        $task = $user->tasks()->create(['title' => 'Report', 'priority' => 'normal', 'due_at' => '2026-10-07T18:00:00Z']);
-
-        $this->actingAs($user)->patch("/tasks/{$task->id}", taskPayload(['title' => 'Report', 'due_at' => '2026-10-10T18:00:00Z']))->assertSessionHasNoErrors();
-
-        expect(googleCalls('POST'))->toHaveCount(1)
-            ->and(googleCalls('PATCH', '/events/evt-1'))->toHaveCount(1)
-            ->and(googleCalls('PATCH')->first()['start']['dateTime'])->toBe('2026-10-10T18:00:00Z');
-    });
-
-    test('removing the deadline removes its Google event, and adding one creates it', function () {
-        fakeGoogle();
-        $user = googleUser();
-        $task = $user->tasks()->create(['title' => 'Report', 'priority' => 'normal', 'due_at' => '2026-10-07T18:00:00Z']);
-
-        $this->actingAs($user)->patch("/tasks/{$task->id}", taskPayload(['due_at' => null]));
-        expect(googleCalls('DELETE', '/events/evt-1'))->toHaveCount(1);
-
-        $this->actingAs($user)->patch("/tasks/{$task->id}", taskPayload(['due_at' => '2026-10-12T18:00:00Z']));
-        expect(googleCalls('POST'))->toHaveCount(2);
-    });
-
-    test('renaming a task renames the Google events of its sessions', function () {
-        fakeGoogle();
-        $user = googleUser();
-        $task = $user->tasks()->create(['title' => 'Study', 'priority' => 'normal']);
-        plannedSession($user, $task);
-
-        $this->actingAs($user)->patch("/tasks/{$task->id}", taskPayload(['title' => 'Study for the exam', 'due_at' => null]));
-
-        expect(googleCalls('PATCH', '/events/evt-1'))->toHaveCount(1)
-            ->and(googleCalls('PATCH')->first()['summary'])->toBe('Study for the exam');
-    });
-
-    test('editing a task copied from Google never writes to Google', function () {
-        fakeGoogle(single: ['ev1' => timedEvent()]);
-        $user = importer(['calendar_id' => 'cal-1']);
-        $this->actingAs($user)->post('/integrations/google/imports', importPayload())->assertSessionHasNoErrors();
-        $task = $user->tasks()->firstOrFail();
-
-        $this->actingAs($user)->patch("/tasks/{$task->id}", taskPayload(['title' => 'Dentist (moved)', 'due_at' => '2026-10-20T18:00:00Z']))->assertSessionHasNoErrors();
-
-        expect(googleWrites())->toHaveCount(0)
-            ->and($task->fresh()->title)->toBe('Dentist (moved)')
-            ->and(GoogleEventImport::count())->toBe(1);
     });
 });

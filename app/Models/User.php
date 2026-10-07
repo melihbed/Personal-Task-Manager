@@ -64,11 +64,6 @@ class User extends Authenticatable
         return $this->hasOne(GoogleAccount::class);
     }
 
-    public function googleEventLinks(): HasMany
-    {
-        return $this->hasMany(GoogleEventLink::class);
-    }
-
     public function googleEventImports(): HasMany
     {
         return $this->hasMany(GoogleEventImport::class);
@@ -107,5 +102,10 @@ class User extends Authenticatable
     public function assistantActions(): HasMany
     {
         return $this->hasMany(AssistantAction::class);
+    }
+
+    public function calendarEvents(): HasMany
+    {
+        return $this->hasMany(CalendarEvent::class);
     }
 }

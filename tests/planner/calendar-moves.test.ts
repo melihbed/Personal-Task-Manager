@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { clock24, movedDeadline, movedGoogleValues, taskUpdatePayload } from '../../resources/js/lib/calendar-moves';
-import type { GoogleEvent } from '../../resources/js/lib/planner';
+import { clock24, eventFormValues, eventUpdatePayload, movedDeadline, movedEvent, taskUpdatePayload } from '../../resources/js/lib/calendar-moves';
+import type { PlannerEvent } from '../../resources/js/lib/planner';
 
 const zone = 'America/New_York';
 
@@ -46,36 +46,58 @@ describe('taskUpdatePayload', () => {
     });
 });
 
-const timed = (overrides: Partial<GoogleEvent> = {}): GoogleEvent => ({
-    id: 'e1', calendar_id: 'c', event_id: 'e1', recurring_event_id: null, title: 'Dentist', calendar: 'Me', color: null, all_day: false,
-    starts_at: '2026-10-07T19:00:00Z', ends_at: '2026-10-07T20:30:00Z', start_date: null, end_date: null, html_link: null, location: null, description: null, guests: 0, ...overrides,
+const timed = (overrides: Partial<PlannerEvent> = {}): PlannerEvent => ({
+    id: 1, title: 'Dentist', location: 'Main St', notes: null, responsibility_id: null, all_day: false,
+    starts_at: '2026-10-07T19:00:00Z', ends_at: '2026-10-07T20:30:00Z', start_date: null, end_date: null, ...overrides,
 });
-const allDay = (start: string, end: string): GoogleEvent => timed({ all_day: true, starts_at: null, ends_at: null, start_date: start, end_date: end });
+const allDay = (start: string, end: string): PlannerEvent => timed({ all_day: true, starts_at: null, ends_at: null, start_date: start, end_date: end });
 
-describe('movedGoogleValues', () => {
+describe('movedEvent', () => {
     it('moves a timed event to the dropped start and keeps its length', () => {
-        expect(movedGoogleValues(timed(), '2026-10-09', 600, zone)).toEqual({ title: 'Dentist', startDate: '2026-10-09', startTime: '10:00', endDate: '2026-10-09', endTime: '11:30' });
+        expect(movedEvent(timed(), '2026-10-09', 600, zone)).toEqual({ all_day: false, starts_at: '2026-10-09T14:00:00.000Z', ends_at: '2026-10-09T15:30:00.000Z' });
     });
 
     it('lets a long event run past midnight', () => {
-        expect(movedGoogleValues(timed({ ends_at: '2026-10-07T23:00:00Z' }), '2026-10-09', 1320, zone)).toEqual({ title: 'Dentist', startDate: '2026-10-09', startTime: '22:00', endDate: '2026-10-10', endTime: '02:00' });
+        expect(movedEvent(timed({ ends_at: '2026-10-07T23:00:00Z' }), '2026-10-09', 1320, zone)).toEqual({ all_day: false, starts_at: '2026-10-10T02:00:00.000Z', ends_at: '2026-10-10T06:00:00.000Z' });
     });
 
     it('does nothing when dropped at its own start', () => {
-        expect(movedGoogleValues(timed(), '2026-10-07', 900, zone)).toBeNull();
+        expect(movedEvent(timed(), '2026-10-07', 900, zone)).toBeNull();
     });
 
     it('needs a time to drop a timed event on', () => {
-        expect(movedGoogleValues(timed(), '2026-10-09', null, zone)).toBeNull();
+        expect(movedEvent(timed(), '2026-10-09', null, zone)).toBeNull();
     });
 
-    it('moves an all-day event to the dropped day and keeps its number of days', () => {
-        // Oct 8 to Oct 10 (end exclusive) is two days: Oct 8 and 9.
-        expect(movedGoogleValues(allDay('2026-10-08', '2026-10-10'), '2026-10-12', null, zone)).toEqual({ title: 'Dentist', startDate: '2026-10-12', startTime: '', endDate: '2026-10-13', endTime: '' });
-        expect(movedGoogleValues(allDay('2026-10-08', '2026-10-09'), '2026-10-12', null, zone)).toEqual({ title: 'Dentist', startDate: '2026-10-12', startTime: '', endDate: '2026-10-12', endTime: '' });
+    it('refuses a time that does not exist because the clocks jump forward', () => {
+        expect(movedEvent(timed(), '2027-03-14', 150, zone)).toBeNull();
+    });
+
+    it('moves an all-day event to the dropped day and keeps its number of days (the last day is inclusive)', () => {
+        expect(movedEvent(allDay('2026-10-08', '2026-10-09'), '2026-10-12', null, zone)).toEqual({ all_day: true, start_date: '2026-10-12', end_date: '2026-10-13' });
+        expect(movedEvent(allDay('2026-10-08', '2026-10-08'), '2026-10-12', null, zone)).toEqual({ all_day: true, start_date: '2026-10-12', end_date: '2026-10-12' });
     });
 
     it('does nothing for an all-day event dropped on its own first day', () => {
-        expect(movedGoogleValues(allDay('2026-10-08', '2026-10-09'), '2026-10-08', null, zone)).toBeNull();
+        expect(movedEvent(allDay('2026-10-08', '2026-10-09'), '2026-10-08', null, zone)).toBeNull();
+    });
+});
+
+describe('eventUpdatePayload', () => {
+    it('carries the whole event with only its time changed', () => {
+        const times = { all_day: false as const, starts_at: '2026-10-09T14:00:00.000Z', ends_at: '2026-10-09T15:30:00.000Z' };
+
+        expect(eventUpdatePayload(timed({ notes: 'Bring the form' }), times)).toEqual({ title: 'Dentist', location: 'Main St', notes: 'Bring the form', responsibility_id: null, ...times });
+    });
+});
+
+describe('eventFormValues', () => {
+    it('shows a timed event as the clock reads in the timezone', () => {
+        expect(eventFormValues(timed(), zone)).toEqual({ startDate: '2026-10-07', startTime: '15:00', endDate: '2026-10-07', endTime: '16:30' });
+        expect(eventFormValues(timed(), 'Europe/Istanbul')).toEqual({ startDate: '2026-10-07', startTime: '22:00', endDate: '2026-10-07', endTime: '23:30' });
+    });
+
+    it('shows an all-day event by its days', () => {
+        expect(eventFormValues(allDay('2026-10-08', '2026-10-09'), zone)).toEqual({ startDate: '2026-10-08', startTime: '', endDate: '2026-10-09', endTime: '' });
     });
 });

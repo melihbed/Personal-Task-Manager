@@ -2,6 +2,7 @@
 
 namespace App\Services\GoogleCalendar;
 
+use App\Models\CalendarEvent;
 use App\Models\CalendarSession;
 use App\Models\Routine;
 use App\Models\Task;
@@ -10,13 +11,44 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Copies a Google event into the planner as a task, a work session or a routine, once. The copy is the user's
- * own from then on. Each copy is recorded so the Google event is hidden from the overlay, and so it is never
- * pushed back to Google as a duplicate. Model events are muted while copying for the same reason.
+ * Copies a Google event into the planner as an event, a task, a work session or a routine, once. The copy is the
+ * user's own from then on. Each copy is recorded so the Google event is hidden from the preview and is never copied
+ * twice. Nothing is ever sent back to Google.
  */
 class GoogleEventImporter
 {
     private const MAX_MINUTES = 1440;
+
+    /**
+     * An event of the app's own, at the Google event's time or on its days, with its place and description.
+     *
+     * @param  array<string, mixed>  $event
+     */
+    public function asEvent(User $user, string $calendarId, array $event, ?int $responsibilityId): CalendarEvent
+    {
+        $allDay = isset($event['start']['date']);
+
+        return DB::transaction(function () use ($user, $calendarId, $event, $responsibilityId, $allDay) {
+            $record = new CalendarEvent([
+                'title' => $this->title($event),
+                'location' => filled($event['location'] ?? null) ? mb_substr(trim($event['location']), 0, 255) : null,
+                'notes' => filled($event['description'] ?? null) ? mb_substr(trim(strip_tags((string) $event['description'])), 0, 5000) ?: null : null,
+                'all_day' => $allDay,
+                'starts_at' => $allDay ? null : $this->instant($event['start']),
+                'ends_at' => $allDay ? null : $this->instant($event['end']),
+                // Google's all-day end date is exclusive; the app keeps the last day itself.
+                'starts_on' => $allDay ? $event['start']['date'] : null,
+                'ends_on' => $allDay ? max($event['start']['date'], CarbonImmutable::parse($event['end']['date'])->subDay()->toDateString()) : null,
+            ]);
+            $record->user()->associate($user);
+            $record->responsibility_id = $responsibilityId;
+            $record->save();
+
+            $this->remember($user, $calendarId, $event['id'], 'event', $record->id);
+
+            return $record;
+        });
+    }
 
     /**
      * A task whose deadline is the event's time: a timed deadline for a timed event, a date-only deadline for an

@@ -39,7 +39,7 @@ class AssistantTools
             $tool('list_tasks', 'List the user\'s tasks, including assignments from Canvas. Use this to answer what is due, overdue, or still to do.', [
                 'filter' => ['type' => 'string', 'enum' => ['open', 'overdue', 'due_soon', 'completed_recently'], 'description' => 'open = not done yet; due_soon = due in the next 48 hours.'],
             ], ['filter']),
-            $tool('get_schedule', 'Get what is on the calendar between two dates: planned work sessions, routines, Google Calendar events and task deadlines. Use this to answer when the user is busy or free.', [
+            $tool('get_schedule', 'Get what is on the calendar between two dates: events, planned work sessions, routines and task deadlines. Use this to answer when the user is busy or free.', [
                 'from_date' => $text('First day: YYYY-MM-DD, today, tomorrow, or a weekday name like friday.'),
                 'to_date' => $text('Last day, in the same forms. At most 14 days after from_date. Same as from_date for a single day.'),
             ], ['from_date', 'to_date']),
@@ -210,6 +210,15 @@ class AssistantTools
 
         $user->tasks()->whereNull('completed_at')->whereNotNull('due_at')->where('due_at', '>=', $start)->where('due_at', '<', $end)->get()
             ->each(fn (Task $task) => $entries->push(['type' => 'deadline', 'title' => $task->title, 'start' => $this->due($task, $timezone), 'sort' => $task->due_at->toIso8601String()]));
+
+        $user->calendarEvents()
+            ->where(fn ($query) => $query
+                ->where(fn ($timed) => $timed->where('all_day', false)->where('starts_at', '<', $end)->where('ends_at', '>', $start))
+                ->orWhere(fn ($allDay) => $allDay->where('all_day', true)->where('starts_on', '<=', $last->toDateString())->where('ends_on', '>=', $first->toDateString())))
+            ->get()
+            ->each(fn ($event) => $entries->push($event->all_day
+                ? ['type' => 'event (all day)', 'title' => $event->title, 'start' => $event->starts_on->format('D M j').($event->ends_on->ne($event->starts_on) ? ' to '.$event->ends_on->format('D M j') : ''), 'sort' => $event->starts_on->toDateString()]
+                : $this->entry('event', $event->title.($event->location ? " ({$event->location})" : ''), $event->starts_at, $event->ends_at, $timezone)));
 
         foreach (app(GoogleCalendarEvents::class)->between($user, $start, $end) as $event) {
             $entries->push($event['all_day']

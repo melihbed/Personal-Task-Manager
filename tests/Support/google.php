@@ -18,7 +18,7 @@ use Inertia\Testing\AssertableInertia as Assert;
 |
 */
 
-/** A user with a connected Google account that pushes everything to the calendar "cal-1". */
+/** A user with a connected Google account that previews the calendar "primary". */
 function googleUser(array $account = []): User
 {
     $user = User::factory()->create();
@@ -27,8 +27,6 @@ function googleUser(array $account = []): User
         'access_token' => 'token',
         'refresh_token' => 'refresh',
         'expires_at' => now()->addHour(),
-        'calendar_id' => 'cal-1',
-        'calendar_name' => 'Planner',
         'import_calendar_ids' => ['primary'],
     ], $account));
 

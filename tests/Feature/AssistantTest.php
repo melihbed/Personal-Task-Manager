@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\AssistantMessage;
+use App\Models\CalendarEvent;
 use App\Models\CalendarSession;
 use App\Models\Routine;
 use App\Models\Task;
@@ -96,6 +97,19 @@ it('reads the schedule for a range of days', function () {
 
     $tool = collect(ollamaRequests()[1]['messages'])->firstWhere('role', 'tool')['content'];
     expect($tool)->toContain('work session')->toContain('Study')->toContain('Thu Oct 8, 3:00 PM')->not->toContain('Oct 20');
+});
+
+it('includes the user\'s own events in the schedule', function () {
+    CalendarEvent::factory()->for($this->user)->create(['title' => 'Dentist', 'location' => 'Main St', 'starts_at' => '2026-10-08 19:00:00', 'ends_at' => '2026-10-08 20:00:00']);
+    CalendarEvent::factory()->for($this->user)->allDay('2026-10-08', '2026-10-09')->create(['title' => 'Conference']);
+    CalendarEvent::factory()->for($this->user)->create(['title' => 'Next week', 'starts_at' => '2026-10-20 19:00:00', 'ends_at' => '2026-10-20 20:00:00']);
+    CalendarEvent::factory()->for(User::factory())->create(['title' => 'Not mine', 'starts_at' => '2026-10-08 19:00:00', 'ends_at' => '2026-10-08 20:00:00']);
+    fakeOllama([['calls' => [['get_schedule', ['from_date' => '2026-10-08', 'to_date' => '2026-10-08']]]], 'Busy.']);
+
+    askAssistant('What is on tomorrow?');
+
+    $tool = collect(ollamaRequests()[1]['messages'])->firstWhere('role', 'tool')['content'];
+    expect($tool)->toContain('Dentist (Main St)')->toContain('Thu Oct 8, 3:00 PM')->toContain('Conference')->toContain('Thu Oct 8 to Fri Oct 9')->not->toContain('Next week')->not->toContain('Not mine');
 });
 
 it('turns down a schedule request that is too long or backwards, and tells the model why', function (array $range) {

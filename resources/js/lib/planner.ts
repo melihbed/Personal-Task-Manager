@@ -13,6 +13,12 @@ export type PlannerSession = {
     color: string | null; completed: boolean; starts_at: string; ends_at: string;
 };
 
+/** One of the app's own events. A timed event has starts_at and ends_at; an all-day event has its first and last day (inclusive). */
+export type PlannerEvent = {
+    id: number; title: string; location: string | null; notes: string | null; responsibility_id: number | null; all_day: boolean;
+    starts_at: string | null; ends_at: string | null; start_date: string | null; end_date: string | null;
+};
+
 /** An event from the user's Google Calendar, shown read-only. An all-day event's end_date is exclusive. */
 export type GoogleEvent = {
     id: string; calendar_id: string; event_id: string; recurring_event_id: string | null;

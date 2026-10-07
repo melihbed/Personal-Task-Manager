@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { addedMessage, buildEditPayload, describeWhen, importAvailability, initialEditValues } from '../../resources/js/lib/google-events';
+import { addedMessage, describeWhen, importAvailability } from '../../resources/js/lib/google-events';
 import type { GoogleEvent } from '../../resources/js/lib/planner';
 
 const base: GoogleEvent = {
@@ -10,9 +10,10 @@ const base: GoogleEvent = {
 const allDay: GoogleEvent = { ...base, all_day: true, starts_at: null, ends_at: null, start_date: '2026-10-08', end_date: '2026-10-09' };
 
 describe('which imports are available', () => {
-    test('a one-off timed event can be a task or a session but not a routine', () => {
+    test('a one-off timed event can be an event, a task or a session but not a routine', () => {
         const result = importAvailability(base);
 
+        expect(result.event.available).toBe(true);
         expect(result.task.available).toBe(true);
         expect(result.session.available).toBe(true);
         expect(result.routine).toEqual({ available: false, reason: 'This event does not repeat.' });
@@ -22,7 +23,8 @@ describe('which imports are available', () => {
         expect(importAvailability({ ...base, recurring_event_id: 'series' }).routine.available).toBe(true);
     });
 
-    test('an all-day event can only be a task, whether or not it repeats', () => {
+    test('an all-day event can be an event or a task, but not a session or routine, whether or not it repeats', () => {
+        expect(importAvailability(allDay).event.available).toBe(true);
         expect(importAvailability(allDay).task.available).toBe(true);
         expect(importAvailability(allDay).session).toEqual({ available: false, reason: 'An all-day event has no time to plan.' });
         expect(importAvailability({ ...allDay, recurring_event_id: 'series' }).routine.available).toBe(false);
@@ -33,6 +35,7 @@ describe('which imports are available', () => {
 
         expect(importAvailability(long).session).toEqual({ available: false, reason: 'This event is longer than 24 hours.' });
         expect(importAvailability(long).task.available).toBe(true);
+        expect(importAvailability(long).event.available).toBe(true);
     });
 });
 
@@ -57,58 +60,9 @@ describe('describing when an event happens', () => {
 
 describe('messages', () => {
     test('says what the event was added as', () => {
+        expect(addedMessage('Dentist', 'event')).toBe('Added “Dentist” as an event.');
         expect(addedMessage('Dentist', 'task')).toBe('Added “Dentist” as a task.');
         expect(addedMessage('Dentist', 'session')).toBe('Added “Dentist” as a work session.');
         expect(addedMessage('Dentist', 'routine')).toBe('Added “Dentist” as a routine.');
-    });
-});
-
-describe('editing an event', () => {
-    const ny = 'America/New_York';
-
-    test('the form starts with the event as it is, in the chosen timezone', () => {
-        expect(initialEditValues(base, ny)).toEqual({ title: 'Dentist', startDate: '2026-10-07', startTime: '15:00', endDate: '2026-10-07', endTime: '16:30' });
-    });
-
-    test('an all-day event starts with its last day, because Google counts the end date as exclusive', () => {
-        expect(initialEditValues(allDay, ny)).toEqual({ title: 'Dentist', startDate: '2026-10-08', startTime: '', endDate: '2026-10-08', endTime: '' });
-        expect(initialEditValues({ ...allDay, end_date: '2026-10-11' }, ny).endDate).toBe('2026-10-10');
-    });
-
-    test('a timed event is saved with exact instants', () => {
-        const payload = buildEditPayload(base, 'event', { title: '  Dentist (moved) ', startDate: '2026-10-08', startTime: '14:00', endDate: '2026-10-08', endTime: '15:00' }, ny);
-
-        expect(payload).toEqual({
-            calendar_id: 'primary', event_id: 'ev1', scope: 'event', title: 'Dentist (moved)', all_day: false, timezone: ny,
-            starts_at: '2026-10-08T18:00:00.000Z', ends_at: '2026-10-08T19:00:00.000Z',
-        });
-    });
-
-    test('an all-day event is saved with its dates', () => {
-        const payload = buildEditPayload(allDay, 'event', { title: 'Conference', startDate: '2026-10-08', startTime: '', endDate: '2026-10-09', endTime: '' }, ny);
-
-        expect(payload).toMatchObject({ all_day: true, start_date: '2026-10-08', end_date: '2026-10-09' });
-        expect(payload).not.toHaveProperty('starts_at');
-    });
-
-    test('a whole series uses the start day for both times, so only the time of day and length count', () => {
-        const payload = buildEditPayload({ ...base, recurring_event_id: 'series' }, 'series', { title: 'Standup', startDate: '2026-10-07', startTime: '09:00', endDate: '2030-01-01', endTime: '09:30' }, ny);
-
-        expect(payload).toMatchObject({ scope: 'series', starts_at: '2026-10-07T13:00:00.000Z', ends_at: '2026-10-07T13:30:00.000Z' });
-    });
-
-    test('values that cannot be saved say why', () => {
-        const ok = { title: 'Dentist', startDate: '2026-10-08', startTime: '14:00', endDate: '2026-10-08', endTime: '15:00' };
-
-        expect(() => buildEditPayload(base, 'event', { ...ok, title: '   ' }, ny)).toThrow('Give the event a title.');
-        expect(() => buildEditPayload(base, 'event', { ...ok, endTime: '13:00' }, ny)).toThrow('The event must end after it starts.');
-        expect(() => buildEditPayload(base, 'event', { ...ok, startTime: '' }, ny)).toThrow('Fill in the date and both times.');
-        expect(() => buildEditPayload(allDay, 'event', { ...ok, startDate: '2026-10-10', endDate: '2026-10-08' }, ny)).toThrow('The last day cannot be before the first day.');
-    });
-
-    test('a time that does not exist because of daylight saving is refused', () => {
-        const values = { title: 'Dentist', startDate: '2026-03-08', startTime: '02:30', endDate: '2026-03-08', endTime: '03:30' };
-
-        expect(() => buildEditPayload(base, 'event', values, ny)).toThrow('daylight saving');
     });
 });

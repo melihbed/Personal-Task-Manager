@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AssistantController;
+use App\Http\Controllers\CalendarEventController;
 use App\Http\Controllers\CalendarItemController;
 use App\Http\Controllers\CalendarSessionController;
 use App\Http\Controllers\CanvasController;
@@ -8,11 +9,10 @@ use App\Http\Controllers\CanvasSyncController;
 use App\Http\Controllers\CompletedTaskController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GoogleCalendarController;
-use App\Http\Controllers\GoogleEventController;
 use App\Http\Controllers\GoogleHiddenEventController;
 use App\Http\Controllers\GoogleImportController;
+use App\Http\Controllers\GoogleMigrationController;
 use App\Http\Controllers\GoogleOAuthController;
-use App\Http\Controllers\GoogleSyncController;
 use App\Http\Controllers\IntegrationsController;
 use App\Http\Controllers\PomodoroController;
 use App\Http\Controllers\RoutineController;
@@ -59,13 +59,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('/integrations/google', [GoogleCalendarController::class, 'destroy'])->name('google.destroy');
     Route::get('/integrations/google/redirect', [GoogleOAuthController::class, 'redirect'])->name('google.redirect');
     Route::get('/integrations/google/callback', [GoogleOAuthController::class, 'callback'])->name('google.callback');
-    Route::patch('/integrations/google/events', [GoogleEventController::class, 'update'])->name('google.events.update');
-    Route::delete('/integrations/google/events', [GoogleEventController::class, 'destroy'])->name('google.events.destroy');
     Route::post('/integrations/google/hidden', [GoogleHiddenEventController::class, 'store'])->name('google.hidden.store');
     Route::delete('/integrations/google/hidden/{hidden}', [GoogleHiddenEventController::class, 'destroy'])->name('google.hidden.destroy');
+    Route::post('/integrations/google/migrate', [GoogleMigrationController::class, 'store'])->name('google.migrate');
     Route::post('/integrations/google/imports', [GoogleImportController::class, 'store'])->name('google.imports.store');
-    Route::post('/integrations/google/sync', [GoogleSyncController::class, 'store'])->name('google.sync.store');
-    Route::delete('/integrations/google/sync', [GoogleSyncController::class, 'destroy'])->name('google.sync.destroy');
 
     Route::get('/integrations/canvas', [CanvasController::class, 'show'])->name('canvas.show');
     Route::post('/integrations/canvas', [CanvasController::class, 'store'])->name('canvas.store');
@@ -104,6 +101,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/completed-tasks', [CompletedTaskController::class, 'destroy'])->name('completed-tasks.destroy');
     Route::patch('/tasks/{task}/completion', [TaskController::class, 'updateCompletion'])->name('tasks.completion.update');
 
+    Route::patch('/events/{event}', [CalendarEventController::class, 'update'])->name('events.update');
+    Route::delete('/events/{event}', [CalendarEventController::class, 'destroy'])->name('events.destroy');
     Route::post('/calendar/items', [CalendarItemController::class, 'store'])->name('calendar-items.store');
 
     Route::post('/tasks/{task}/calendar-sessions', [CalendarSessionController::class, 'store'])->name('calendar-sessions.store');

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNow } from '../../lib/use-now';
-import { dateLabel, timeLabel, zonedParts, type GoogleEvent, type PlannerSession, type PlannerTask, type RoutineOccurrence } from '../../lib/planner';
+import { dateLabel, timeLabel, zonedParts, type GoogleEvent, type PlannerEvent, type PlannerSession, type PlannerTask, type RoutineOccurrence } from '../../lib/planner';
 import { courseTitle } from '../../lib/school';
 import { buildAgenda, buildAttention, type AgendaItem } from '../../lib/today';
 import DuePill from '../due-pill';
@@ -10,13 +10,16 @@ type Props = {
     responsibilities: { id: number; name: string; color: string | null }[];
     sessions: PlannerSession[];
     routines: RoutineOccurrence[];
-    /** Undefined while Google is still loading. */
+    /** The app's own events for today. */
+    appEvents: PlannerEvent[];
+    /** The Google preview, undefined while it is still loading. */
     events: GoogleEvent[] | undefined;
     timezone: string;
     onPlanTask: (task: PlannerTask) => void;
     onSelectSession: (session: PlannerSession) => void;
     onSelectOccurrence: (occurrence: RoutineOccurrence) => void;
     onSelectEvent: (event: GoogleEvent) => void;
+    onSelectAppEvent: (event: PlannerEvent) => void;
 };
 
 const ATTENTION_LIMIT = 4;
@@ -43,7 +46,7 @@ function MoreButton({ open, hidden, onClick }: { open: boolean; hidden: number; 
  * A glance at the day: what needs attention (overdue, or due in the next 48 hours) and what is on next,
  * merged from the calendar, planned sessions, routines and deadlines. Clicking an item opens it.
  */
-export default function TodayPanel({ tasks, responsibilities, sessions, routines, events, timezone, onPlanTask, onSelectSession, onSelectOccurrence, onSelectEvent }: Props) {
+export default function TodayPanel({ tasks, responsibilities, sessions, routines, appEvents, events, timezone, onPlanTask, onSelectSession, onSelectOccurrence, onSelectEvent, onSelectAppEvent }: Props) {
     const now = useNow();
     const [attentionOpen, setAttentionOpen] = useState(false);
     const [agendaOpen, setAgendaOpen] = useState(false);
@@ -51,7 +54,7 @@ export default function TodayPanel({ tasks, responsibilities, sessions, routines
 
     const { overdue, soon } = buildAttention(tasks, now, timezone);
     const attention = [...overdue, ...soon];
-    const agenda = buildAgenda({ events: events ?? [], sessions, routines, tasks }, now, timezone);
+    const agenda = buildAgenda({ events: events ?? [], appEvents, sessions, routines, tasks }, now, timezone);
     const earlier = agenda.filter(item => item.when === 'past');
     const upcoming = agenda.filter(item => item.when !== 'past');
     const shownAttention = attentionOpen ? attention : attention.slice(0, ATTENTION_LIMIT);
@@ -62,7 +65,8 @@ export default function TodayPanel({ tasks, responsibilities, sessions, routines
     function open(item: AgendaItem) {
         const source = item.source;
 
-        if (source.kind === 'event') onSelectEvent(source.event);
+        if (source.kind === 'appEvent') onSelectAppEvent(source.event);
+        else if (source.kind === 'event') onSelectEvent(source.event);
         else if (source.kind === 'session') onSelectSession(source.session);
         else if (source.kind === 'routine') onSelectOccurrence(source.occurrence);
         else onPlanTask(source.task);

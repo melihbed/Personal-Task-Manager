@@ -8,9 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class GoogleAccount extends Model
 {
     protected $fillable = [
-        'email', 'access_token', 'refresh_token', 'expires_at', 'needs_reconnect',
-        'calendar_id', 'calendar_name', 'import_calendar_ids',
-        'push_sessions', 'push_routines', 'push_deadlines',
+        'email', 'access_token', 'refresh_token', 'expires_at', 'needs_reconnect', 'import_calendar_ids',
     ];
 
     protected $hidden = ['access_token', 'refresh_token'];
@@ -23,9 +21,6 @@ class GoogleAccount extends Model
             'expires_at' => 'datetime',
             'needs_reconnect' => 'boolean',
             'import_calendar_ids' => 'array',
-            'push_sessions' => 'boolean',
-            'push_routines' => 'boolean',
-            'push_deadlines' => 'boolean',
         ];
     }
 
@@ -51,24 +46,6 @@ class GoogleAccount extends Model
             $account === null => 'not_connected',
             $account->needs_reconnect => 'needs_reconnect',
             default => 'connected',
-        };
-    }
-
-    /**
-     * Whether planner items are being sent to Google: a calendar is chosen, the connection works, and
-     * the toggle for this kind of item is on.
-     */
-    public function pushes(string $kind): bool
-    {
-        if ($this->calendar_id === null || $this->needs_reconnect) {
-            return false;
-        }
-
-        return match ($kind) {
-            'session' => $this->push_sessions,
-            'routine', 'occurrence' => $this->push_routines,
-            'deadline' => $this->push_deadlines,
-            default => false,
         };
     }
 }
