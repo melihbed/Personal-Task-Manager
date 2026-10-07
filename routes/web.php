@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AssistantController;
+use App\Http\Controllers\CalendarItemController;
 use App\Http\Controllers\CalendarSessionController;
 use App\Http\Controllers\CanvasController;
 use App\Http\Controllers\CanvasSyncController;
@@ -102,6 +103,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
     Route::delete('/completed-tasks', [CompletedTaskController::class, 'destroy'])->name('completed-tasks.destroy');
     Route::patch('/tasks/{task}/completion', [TaskController::class, 'updateCompletion'])->name('tasks.completion.update');
+
+    Route::post('/calendar/items', [CalendarItemController::class, 'store'])->name('calendar-items.store');
 
     Route::post('/tasks/{task}/calendar-sessions', [CalendarSessionController::class, 'store'])->name('calendar-sessions.store');
     Route::delete('/calendar-sessions/{session}', [CalendarSessionController::class, 'destroy'])->name('calendar-sessions.destroy');

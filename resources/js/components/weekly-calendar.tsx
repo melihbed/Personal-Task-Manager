@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { dueDay, dueMinutes, dueState, formatDue } from '../lib/deadlines';
 import { addDays, calendarScrollTop, dateLabel, dayLayout, minutesSinceMidnight, overlaps, timeLabel, zonedParts, type GoogleEvent, type PlannerSession, type PlannerTask, type RoutineOccurrence } from '../lib/planner';
 
@@ -27,7 +27,14 @@ type Props = {
     onMoveGoogle: (event: GoogleEvent, date: string, minutes: number | null) => void;
     /** A deadline was dragged to a new day (minutes is the new time, or null for a date-only deadline). */
     onMoveDeadline: (task: PlannerTask, date: string, minutes: number | null) => void;
+    /** Empty time was clicked or dragged across. start and end are minutes since midnight (end may be 1440); rect is where it is on screen. */
+    onCreateRange: (range: { date: string; start: number; end: number; rect: DOMRect }) => void;
+    /** The range the open "new item" popover is for, kept highlighted while it is open. */
+    pendingRange: { date: string; start: number; end: number } | null;
 };
+
+const CELL = 15;
+const cellOf = (y: number, rect: DOMRect) => Math.min(95, Math.max(0, Math.floor(((y - rect.top) / HOUR_HEIGHT * 60) / CELL)));
 
 /** A deadline or an all-day Google event being dragged. A timed deadline goes on the time grid; the rest go on the "Due" row. */
 type DueDrag = { task?: PlannerTask; event?: GoogleEvent; timed: boolean };
@@ -69,6 +76,8 @@ export default function WeeklyCalendar({
     onMoveRoutine,
     onMoveGoogle,
     onMoveDeadline,
+    onCreateRange,
+    pendingRange,
 }: Props) {
     const [now, setNow] = useState(() => new Date());
     const today = zonedParts(now, timezone).date;
@@ -81,6 +90,8 @@ export default function WeeklyCalendar({
     const [draggingBlock, setDraggingBlock] = useState<{ block: Block; grabMinutes: number } | null>(null);
     const [draggingDue, setDraggingDue] = useState<DueDrag | null>(null);
     const [dueHover, setDueHover] = useState<string | null>(null);
+    /** A drag across empty time, in 15-minute cells, from the first cell touched to the one under the pointer. */
+    const [selecting, setSelecting] = useState<{ date: string; from: number; to: number } | null>(null);
 
     const blocks: Block[] = [
         ...sessions.map((session): Block => ({
@@ -184,6 +195,54 @@ export default function WeeklyCalendar({
         if (!draggingTask && !draggingBlock && !draggingDue) setHover(null);
         if (!draggingDue) setDueHover(null);
     }, [draggingTask, draggingBlock, draggingDue]);
+
+    /**
+     * Press on empty time and drag to choose a range, like Google Calendar. A plain click chooses an hour, starting on the half
+     * hour at or before the click. Releasing hands the range to the parent, which opens the "new item" form beside it.
+     */
+    function startSelecting(event: ReactPointerEvent<HTMLDivElement>, date: string) {
+        if (event.button !== 0 || (event.target as HTMLElement).closest('.pm-calendar-session, .pm-deadline, button')) return;
+
+        const column = event.currentTarget;
+        const first = cellOf(event.clientY, column.getBoundingClientRect());
+        let last = first;
+        let moved = false;
+
+        event.preventDefault();
+        setSelecting({ date, from: first, to: first });
+
+        const move = (pointer: PointerEvent) => {
+            last = cellOf(pointer.clientY, column.getBoundingClientRect());
+            moved = moved || last !== first;
+            setSelecting({ date, from: first, to: last });
+        };
+        const stop = () => {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', finish);
+            window.removeEventListener('pointercancel', stop);
+            window.removeEventListener('keydown', cancel);
+            setSelecting(null);
+        };
+        const finish = () => {
+            const start = moved ? Math.min(first, last) * CELL : Math.floor(first * CELL / 30) * 30;
+            const end = moved ? (Math.max(first, last) + 1) * CELL : Math.min(1440, start + 60);
+            const rect = column.getBoundingClientRect();
+
+            stop();
+            onCreateRange({ date, start, end, rect: new DOMRect(rect.left, rect.top + start / 60 * HOUR_HEIGHT, rect.width, (end - start) / 60 * HOUR_HEIGHT) });
+        };
+        const cancel = (key: KeyboardEvent) => { if (key.key === 'Escape') stop(); };
+
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', finish);
+        window.addEventListener('pointercancel', stop);
+        window.addEventListener('keydown', cancel);
+    }
+
+    /** The range to highlight in a day: the one being dragged, or the one the open form is for. */
+    const rangeFor = (date: string) => selecting?.date === date
+        ? { start: Math.min(selecting.from, selecting.to) * CELL, end: (Math.max(selecting.from, selecting.to) + 1) * CELL }
+        : pendingRange?.date === date ? pendingRange : null;
 
     /** Starts dragging a deadline or an all-day event from the "Due" row or the time grid. */
     function startDueDrag(event: DragEvent<HTMLElement>, drag: DueDrag, label: string) {
@@ -346,6 +405,7 @@ export default function WeeklyCalendar({
                                 if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHover(null);
                             }}
                             onDrop={event => drop(event, date)}
+                            onPointerDown={event => startSelecting(event, date)}
                         >
                             {Array.from({ length: 24 }, (_, hour) => (
                                 <div key={hour} className="absolute inset-x-0 border-t border-[var(--pm-border)]" style={{ top: hour * HOUR_HEIGHT }}>
@@ -422,6 +482,16 @@ export default function WeeklyCalendar({
                                     <span className="pm-deadline__label">{task.title}</span>
                                 </button>
                             ))}
+
+                            {(() => {
+                                const range = rangeFor(date);
+
+                                return range && (
+                                    <div className="pm-selection" style={{ top: range.start / 60 * HOUR_HEIGHT, height: Math.max(18, (range.end - range.start) / 60 * HOUR_HEIGHT - 2) }}>
+                                        <span>{clock(range.start)} – {clock(range.end % 1440)}</span>
+                                    </div>
+                                );
+                            })()}
 
                             {date === today && <div className="pm-now" aria-hidden="true" style={{ top: nowMinutes / 60 * HOUR_HEIGHT }} />}
 

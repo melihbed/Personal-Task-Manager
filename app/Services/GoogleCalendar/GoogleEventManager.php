@@ -5,6 +5,7 @@ namespace App\Services\GoogleCalendar;
 use App\Models\GoogleAccount;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Edits and deletes events in the user's Google Calendar. These change the real event in Google. For a repeating
@@ -33,6 +34,39 @@ class GoogleEventManager
             ->delete();
 
         GoogleCalendarEvents::forget($account);
+    }
+
+    /**
+     * Adds a new event to one of the calendars shown in the planner. Without a calendar, the user's primary calendar is used
+     * if it is shown and can be added to, otherwise the first one that can.
+     *
+     * @param  array{title: string, timezone: string, starts_at: string, ends_at: string}  $details
+     *
+     * @throws EventActionFailed
+     */
+    public function create(GoogleAccount $account, ?string $calendarId, array $details): void
+    {
+        $client = new GoogleCalendarClient($account);
+        $calendarId = $this->targetCalendar($account, $client, $calendarId);
+
+        $this->run(fn () => $client->insert($calendarId, ['summary' => $details['title']] + $this->eventTimes($details + ['all_day' => false])));
+
+        GoogleCalendarEvents::forget($account);
+    }
+
+    /**
+     * @throws EventActionFailed
+     */
+    private function targetCalendar(GoogleAccount $account, GoogleCalendarClient $client, ?string $requested): string
+    {
+        $calendars = $this->run(fn () => Cache::remember("google-calendars:{$account->id}", 300, fn () => $client->calendars()));
+        $writable = collect($calendars)->filter(fn (array $calendar) => $calendar['writable'] && in_array($calendar['id'], $account->import_calendar_ids ?? [], true));
+
+        if ($requested !== null) {
+            return $writable->contains('id', $requested) ? $requested : throw new EventActionFailed('That calendar is not one you can add events to from here.');
+        }
+
+        return ($writable->firstWhere('primary', true) ?? $writable->first())['id'] ?? throw new EventActionFailed('None of the calendars shown in the planner can be added to. Choose one in the Google Calendar settings.');
     }
 
     /**
