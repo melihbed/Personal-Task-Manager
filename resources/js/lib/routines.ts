@@ -17,7 +17,8 @@ export const dayPresets = [
     { label: 'Weekends', days: [6, 7] },
 ];
 
-const sameDays = (a: number[], b: number[]) => a.length === b.length && a.every((day, index) => day === b[index]);
+const sameDays = (a: number[], b: number[]) =>
+    a.length === b.length && a.every((day, index) => day === b[index]);
 
 export function describeDays(days: number[]): string {
     const sorted = [...days].sort((a, b) => a - b);
@@ -48,11 +49,16 @@ export function formatLength(minutes: number): string {
     return rest === 0 ? hourText : `${hourText} ${rest} min`;
 }
 
-type Rule = Pick<PlannerRoutine, 'days' | 'start_time' | 'duration_minutes' | 'ends_on'>;
+type Rule = Pick<
+    PlannerRoutine,
+    'days' | 'start_time' | 'duration_minutes' | 'ends_on'
+>;
 
 /** 'Every Tue, Thu at 8:00 AM · 1 hour · Never ends' */
 export function routineSummary(rule: Rule, endLabel?: string): string {
-    const ends = rule.ends_on ? `Ends ${endLabel ?? rule.ends_on}` : 'Never ends';
+    const ends = rule.ends_on
+        ? `Ends ${endLabel ?? rule.ends_on}`
+        : 'Never ends';
 
     return `${describeDays(rule.days)} at ${formatClock(rule.start_time)} · ${formatLength(rule.duration_minutes)} · ${ends}`;
 }

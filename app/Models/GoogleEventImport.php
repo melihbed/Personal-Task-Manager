@@ -10,6 +10,7 @@ class GoogleEventImport extends Model
     /** kind is task, session or routine for a copy in the planner, or hidden for an event hidden from the calendar. */
     protected $fillable = ['google_calendar_id', 'google_event_id', 'kind', 'item_id', 'label'];
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

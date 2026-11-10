@@ -22,6 +22,7 @@ class PomodoroSetting extends Model
         return ['focus_minutes' => 'integer', 'short_break_minutes' => 'integer', 'long_break_minutes' => 'integer', 'rounds_before_long' => 'integer', 'sound_enabled' => 'boolean'];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

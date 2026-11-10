@@ -20,6 +20,7 @@ class RoutineOccurrence extends Model
         ];
     }
 
+    /** @return BelongsTo<Routine, $this> */
     public function routine(): BelongsTo
     {
         return $this->belongsTo(Routine::class);

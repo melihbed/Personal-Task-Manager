@@ -15,8 +15,8 @@ class CalendarSessionController extends Controller
     {
         $record = $request->user()->tasks()->findOrFail($task);
         // TODO: Reject with 403 Forbidden if the task has a responsibility and either:
-        //- That responsibility belongs to another user.
-        //- That responsibility is archived.
+        // - That responsibility belongs to another user.
+        // - That responsibility is archived.
         // A task without a responsibility can continue.
         abort_if($record->responsibility &&
             ($record->responsibility->user_id !== $request->user()->id
@@ -45,24 +45,26 @@ class CalendarSessionController extends Controller
             DB::table('users')->where('id', $request->user()->id)->lockForUpdate()->first();
             $conflict = CalendarSession::where('user_id', $request->user()->id)
                 ->where('starts_at', '<', $end)->where('ends_at', '>', $start)->exists();
-            if ($conflict && !$validated['allow_overlap']) {
+            if ($conflict && ! $validated['allow_overlap']) {
                 throw ValidationException::withMessages([
                     'allow_overlap' => 'This overlaps an existing work session. Check “Save despite overlap” to continue.',
                 ]);
             }
-            $session = new CalendarSession();
+            $session = new CalendarSession;
             $session->user()->associate($request->user());
             $session->task()->associate($record);
             $session->starts_at = $start;
             $session->ends_at = $end;
             $session->save();
         });
+
         return back();
     }
 
     public function destroy(Request $request, string $session): RedirectResponse
     {
         CalendarSession::where('user_id', $request->user()->id)->findOrFail($session)->delete();
+
         return back();
     }
 
@@ -98,7 +100,7 @@ class CalendarSessionController extends Controller
                 ->where('ends_at', '>', $start)
                 ->exists();
 
-            if ($conflict && !$validated['allow_overlap']) {
+            if ($conflict && ! $validated['allow_overlap']) {
                 throw ValidationException::withMessages([
                     'allow_overlap' => 'This overlaps an existing work session. Check “Save despite overlap” to continue.',
                 ]);

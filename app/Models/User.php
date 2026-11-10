@@ -44,66 +44,79 @@ class User extends Authenticatable
         ];
     }
 
+    /** @return HasMany<Responsibility, $this> */
     public function responsibilities(): HasMany
     {
         return $this->hasMany(Responsibility::class);
     }
 
+    /** @return HasMany<Task, $this> */
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class);
     }
 
+    /** @return HasMany<Routine, $this> */
     public function routines(): HasMany
     {
         return $this->hasMany(Routine::class);
     }
 
+    /** @return HasOne<GoogleAccount, $this> */
     public function googleAccount(): HasOne
     {
         return $this->hasOne(GoogleAccount::class);
     }
 
+    /** @return HasMany<GoogleEventImport, $this> */
     public function googleEventImports(): HasMany
     {
         return $this->hasMany(GoogleEventImport::class);
     }
 
+    /** @return HasOne<CanvasAccount, $this> */
     public function canvasAccount(): HasOne
     {
         return $this->hasOne(CanvasAccount::class);
     }
 
+    /** @return HasMany<CanvasCourse, $this> */
     public function canvasCourses(): HasMany
     {
         return $this->hasMany(CanvasCourse::class);
     }
 
+    /** @return HasMany<CanvasAssignment, $this> */
     public function canvasAssignments(): HasMany
     {
         return $this->hasMany(CanvasAssignment::class);
     }
 
+    /** @return HasMany<AssistantMessage, $this> */
     public function assistantMessages(): HasMany
     {
         return $this->hasMany(AssistantMessage::class);
     }
 
+    /** @return HasMany<PomodoroSession, $this> */
     public function pomodoroSessions(): HasMany
     {
         return $this->hasMany(PomodoroSession::class);
     }
 
+    /** @return HasOne<PomodoroSetting, $this> */
     public function pomodoroSetting(): HasOne
     {
         return $this->hasOne(PomodoroSetting::class);
     }
 
+    /** @return HasMany<AssistantAction, $this> */
     public function assistantActions(): HasMany
     {
         return $this->hasMany(AssistantAction::class);
     }
 
+    /** @return HasMany<CalendarEvent, $this> */
     public function calendarEvents(): HasMany
     {
         return $this->hasMany(CalendarEvent::class);

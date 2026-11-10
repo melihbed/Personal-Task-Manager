@@ -29,16 +29,19 @@ class Routine extends Model
         ];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<Responsibility, $this> */
     public function responsibility(): BelongsTo
     {
         return $this->belongsTo(Responsibility::class);
     }
 
+    /** @return HasMany<RoutineOccurrence, $this> */
     public function occurrences(): HasMany
     {
         return $this->hasMany(RoutineOccurrence::class);

@@ -20,10 +20,20 @@ export default function ForgotPassword() {
         <AuthLayout
             title="Forgot your password?"
             description="Enter your email and we will send you a link to reset it."
-            footer={<>Remembered it? <Link href="/login" className="pm-link">Back to log in</Link></>}
+            footer={
+                <>
+                    Remembered it?{' '}
+                    <Link href="/login" className="pm-link">
+                        Back to log in
+                    </Link>
+                </>
+            }
         >
             {status && (
-                <p role="status" className="mb-4 rounded-xl bg-green-50 px-3 py-2 text-sm text-green-700">
+                <p
+                    role="status"
+                    className="mb-4 rounded-xl bg-green-50 px-3 py-2 text-sm text-green-700"
+                >
                     {status}
                 </p>
             )}
@@ -40,7 +50,12 @@ export default function ForgotPassword() {
                     required
                 />
 
-                <Button type="submit" loading={processing} loadingLabel="Sending reset link" className="w-full">
+                <Button
+                    type="submit"
+                    loading={processing}
+                    loadingLabel="Sending reset link"
+                    className="w-full"
+                >
                     Email reset link
                 </Button>
             </form>

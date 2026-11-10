@@ -50,10 +50,10 @@ class CalendarSessionTest extends TestCase
         $task = $this->task($user);
         $url = "/tasks/{$task->id}/calendar-sessions";
         $this->actingAs($user)->from('/')->post($url, $this->payload())->assertSessionHasNoErrors();
-        $this->post($url, $this->payload('09:30','10:30'))->assertSessionHasErrors('allow_overlap');
+        $this->post($url, $this->payload('09:30', '10:30'))->assertSessionHasErrors('allow_overlap');
         $this->assertDatabaseCount('calendar_sessions', 1);
-        $this->post($url, $this->payload('10:00','11:00'))->assertSessionHasNoErrors();
-        $this->post($url, $this->payload('09:30','10:30', true))->assertSessionHasNoErrors();
+        $this->post($url, $this->payload('10:00', '11:00'))->assertSessionHasNoErrors();
+        $this->post($url, $this->payload('09:30', '10:30', true))->assertSessionHasNoErrors();
         $this->assertDatabaseCount('calendar_sessions', 3);
     }
 
@@ -62,7 +62,7 @@ class CalendarSessionTest extends TestCase
         $user = User::factory()->create();
         $task = $this->task($user);
         $url = "/tasks/{$task->id}/calendar-sessions";
-        $this->actingAs($user)->from('/')->post($url, $this->payload('10:00','09:00'))->assertSessionHasErrors('ends_at');
+        $this->actingAs($user)->from('/')->post($url, $this->payload('10:00', '09:00'))->assertSessionHasErrors('ends_at');
         $this->post($url, ['starts_at' => '2026-10-05T09:00:00', 'ends_at' => '2026-10-05T10:00:00', 'allow_overlap' => false])->assertSessionHasErrors('starts_at');
         $this->assertDatabaseCount('calendar_sessions', 0);
     }

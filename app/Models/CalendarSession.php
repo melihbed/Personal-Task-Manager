@@ -17,11 +17,13 @@ class CalendarSession extends Model
         return ['starts_at' => 'immutable_datetime', 'ends_at' => 'immutable_datetime'];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<Task, $this> */
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class);

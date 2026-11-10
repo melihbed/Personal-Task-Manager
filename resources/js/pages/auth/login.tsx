@@ -23,7 +23,14 @@ export default function Login() {
         <AuthLayout
             title="Welcome back"
             description="Log in to your personal task manager."
-            footer={<>Need an account? <Link href="/register" className="pm-link">Register</Link></>}
+            footer={
+                <>
+                    Need an account?{' '}
+                    <Link href="/register" className="pm-link">
+                        Register
+                    </Link>
+                </>
+            }
         >
             <form onSubmit={submit} className="space-y-4">
                 <Field
@@ -44,12 +51,16 @@ export default function Login() {
                         type="password"
                         autoComplete="current-password"
                         value={data.password}
-                        onChange={(event) => setData('password', event.target.value)}
+                        onChange={(event) =>
+                            setData('password', event.target.value)
+                        }
                         error={errors.password}
                         required
                     />
                     <div className="mt-2 flex justify-end text-sm">
-                        <Link href="/forgot-password" className="pm-link">Forgot password</Link>
+                        <Link href="/forgot-password" className="pm-link">
+                            Forgot password
+                        </Link>
                     </div>
                 </div>
 
@@ -57,13 +68,20 @@ export default function Login() {
                     <input
                         type="checkbox"
                         checked={data.remember}
-                        onChange={(event) => setData('remember', event.target.checked)}
+                        onChange={(event) =>
+                            setData('remember', event.target.checked)
+                        }
                         className="accent-[var(--pm-text)]"
                     />
                     Remember me
                 </label>
 
-                <Button type="submit" loading={processing} loadingLabel="Logging in" className="w-full">
+                <Button
+                    type="submit"
+                    loading={processing}
+                    loadingLabel="Logging in"
+                    className="w-full"
+                >
                     Log in
                 </Button>
             </form>

@@ -1,0 +1,589 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Cannot assign offset ''result'' to string\.$#'
+			identifier: offsetAssign.dimType
+			count: 1
+			path: app/Http/Controllers/AssistantController.php
+
+		-
+			message: '#^Cannot assign offset ''status'' to string\.$#'
+			identifier: offsetAssign.dimType
+			count: 1
+			path: app/Http/Controllers/AssistantController.php
+
+		-
+			message: '#^Offset ''status'' does not exist on non\-empty\-string\.$#'
+			identifier: offsetAccess.notFound
+			count: 2
+			path: app/Http/Controllers/AssistantController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,string\>\:\:map\(\) expects callable\(string, 0\)\: array\{summary\: mixed, destructive\: bool, status\: mixed, result\: mixed\}, Closure\(array\)\: array\{summary\: mixed, destructive\: bool, status\: mixed, result\: mixed\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/AssistantController.php
+
+		-
+			message: '#^Parameter \#1 \$value of function collect expects Illuminate\\Contracts\\Support\\Arrayable\<\*NEVER\*, \*NEVER\*\>\|iterable\<\*NEVER\*, \*NEVER\*\>\|null, array\{\}\|string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/AssistantController.php
+
+		-
+			message: '#^Parameter \#2 \$proposal of method App\\Services\\Assistant\\ProposalExecutor\:\:execute\(\) expects array\<string, mixed\>, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/AssistantController.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: mixed$#'
+			identifier: match.unhandled
+			count: 1
+			path: app/Http/Controllers/CalendarItemController.php
+
+		-
+			message: '#^Unable to resolve the template type TKey in call to function collect$#'
+			identifier: argument.templateType
+			count: 1
+			path: app/Http/Controllers/CalendarItemController.php
+
+		-
+			message: '#^Unable to resolve the template type TValue in call to function collect$#'
+			identifier: argument.templateType
+			count: 1
+			path: app/Http/Controllers/CalendarItemController.php
+
+		-
+			message: '#^Cannot call method toIso8601String\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Http/Controllers/CanvasController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Task\:\:\$next_session_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/DashboardController.php
+
+		-
+			message: '#^Cannot call method toDateString\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: app/Http/Controllers/DashboardController.php
+
+		-
+			message: '#^Cannot call method utc\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: app/Http/Controllers/DashboardController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\DashboardController\:\:events\(\) should return list\<array\<string, mixed\>\> but returns array\<int, array\<string, mixed\>\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/DashboardController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\DashboardController\:\:routines\(\) should return array\{routines\: list\<array\<string, mixed\>\>, week\: list\<array\<string, mixed\>\>, today\: list\<array\<string, mixed\>\>\} but returns array\{routines\: array\<int, array\{id\: mixed, title\: mixed, responsibility_id\: mixed, days\: mixed, start_time\: string, duration_minutes\: mixed, timezone\: mixed, starts_on\: mixed, \.\.\.\}\>, week\: array\<int, array\{routine_id\: int, occurs_on\: string, title\: string, starts_at\: string, ends_at\: string, completed\: bool, moved\: bool, responsibility_name\: string, \.\.\.\}\>, today\: array\<int, array\{routine_id\: int, occurs_on\: string, title\: string, starts_at\: string, ends_at\: string, completed\: bool, moved\: bool, responsibility_name\: string, \.\.\.\}\>\}\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/DashboardController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\DashboardController\:\:sessions\(\) should return Illuminate\\Support\\Collection\<int, array\<string, mixed\>\> but returns Illuminate\\Support\\Collection\<int, array\{id\: mixed, task_id\: mixed, title\: mixed, responsibility_name\: mixed, color\: mixed, completed\: bool, starts_at\: mixed, ends_at\: mixed\}\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/DashboardController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Routine\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Http/Controllers/DashboardController.php
+
+		-
+			message: '#^Return type of call to method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Routine\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: method.unresolvableReturnType
+			count: 1
+			path: app/Http/Controllers/DashboardController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Http/Controllers/DashboardController.php
+
+		-
+			message: '#^Parameter \#2 \$haystack of function in_array expects array, array\|string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/GoogleHiddenEventController.php
+
+		-
+			message: '#^Parameter \#2 \$haystack of function in_array expects array, array\|string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/GoogleImportController.php
+
+		-
+			message: '#^Access to an undefined property Laravel\\Socialite\\Contracts\\User\:\:\$refreshToken\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/GoogleOAuthController.php
+
+		-
+			message: '#^Access to an undefined property Laravel\\Socialite\\Contracts\\User\:\:\$token\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/GoogleOAuthController.php
+
+		-
+			message: '#^Call to an undefined method Laravel\\Socialite\\Contracts\\Provider\:\:scopes\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/GoogleOAuthController.php
+
+		-
+			message: '#^Unable to resolve the template type TKey in call to function collect$#'
+			identifier: argument.templateType
+			count: 1
+			path: app/Http/Controllers/RoutineController.php
+
+		-
+			message: '#^Unable to resolve the template type TValue in call to function collect$#'
+			identifier: argument.templateType
+			count: 1
+			path: app/Http/Controllers/RoutineController.php
+
+		-
+			message: '#^Cannot call method toIso8601String\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Http/Controllers/SchoolController.php
+
+		-
+			message: '#^Cannot call method toDateString\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: app/Models/CalendarEvent.php
+
+		-
+			message: '#^Cannot call method utc\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: app/Models/CalendarEvent.php
+
+		-
+			message: '#^Cannot call method toDateString\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 3
+			path: app/Models/Routine.php
+
+		-
+			message: '#^Parameter \#1 \$date of static method Carbon\\CarbonImmutable\:\:instance\(\) expects DateTimeInterface, Carbon\\CarbonImmutable\|string given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Models/Routine.php
+
+		-
+			message: '#^Parameter \#2 \$haystack of function in_array expects array, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Models/Routine.php
+
+		-
+			message: '#^Parameter \#2 \$start of method App\\Models\\Routine\:\:occurrence\(\) expects Carbon\\CarbonImmutable, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Models/Routine.php
+
+		-
+			message: '#^Parameter \#3 \$end of method App\\Models\\Routine\:\:occurrence\(\) expects Carbon\\CarbonImmutable, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Models/Routine.php
+
+		-
+			message: '#^Unable to resolve the template type TNewKey in call to method Illuminate\\Support\\Collection\<int,App\\Models\\RoutineOccurrence\>\:\:keyBy\(\)$#'
+			identifier: argument.templateType
+			count: 1
+			path: app/Models/Routine.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>ends_at" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Models/Routine.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>starts_at" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Models/Routine.php
+
+		-
+			message: '#^Static property App\\Observers\\TaskObserver\:\:\$sessionIds \(array\<int, list\<int\>\>\) does not accept non\-empty\-array\<int, array\<mixed\>\>\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: app/Observers/TaskObserver.php
+
+		-
+			message: '#^Cannot call method format\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 3
+			path: app/Services/Assistant/ActionLog.php
+
+		-
+			message: '#^Cannot call method setTimezone\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Services/Assistant/ActionLog.php
+
+		-
+			message: '#^Parameter \#2 \$array of function array_map expects array, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Assistant/ActionLog.php
+
+		-
+			message: '#^Method App\\Services\\Assistant\\AssistantRunner\:\:history\(\) should return list\<array\{role\: string, content\: string\}\> but returns array\<int, array\{role\: string, content\: string\}\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/Assistant/AssistantRunner.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,string\>\:\:map\(\) expects callable\(string, 0\)\: non\-falsy\-string, Closure\(array\)\: non\-falsy\-string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Assistant/AssistantRunner.php
+
+		-
+			message: '#^Parameter \#1 \$string of function mb_substr expects string, string\|false given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Assistant/AssistantRunner.php
+
+		-
+			message: '#^Parameter \#1 \$value of function collect expects Illuminate\\Contracts\\Support\\Arrayable\<\*NEVER\*, \*NEVER\*\>\|iterable\<\*NEVER\*, \*NEVER\*\>\|null, array\{\}\|string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Assistant/AssistantRunner.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Task\:\:\$planned\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Argument of an invalid type array\<mixed\>\|false supplied for foreach, only iterables are supported\.$#'
+			identifier: foreach.nonIterable
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Cannot call method format\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 5
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Cannot call method isBefore\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Cannot call method isPast\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Cannot call method lte\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Cannot call method ne\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Cannot call method setTimezone\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Cannot call method toDateString\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 4
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Cannot call method toIso8601String\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Method App\\Services\\Assistant\\AssistantTools\:\:coursework\(\) should return list\<array\<string, mixed\>\> but returns array\<int, array\{name\: mixed, course\: mixed, type\: mixed, due\: mixed, overdue\: bool, marked_missing_in_canvas\: mixed, points\: mixed, task_id\: mixed\}\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Method App\\Services\\Assistant\\AssistantTools\:\:listChanges\(\) should return list\<array\<string, mixed\>\> but returns array\<int, array\{when\: mixed, outcome\: mixed, what\: mixed, details\: array\<non\-falsy\-string\>, error\: mixed\}\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Method App\\Services\\Assistant\\AssistantTools\:\:listRoutines\(\) should return list\<array\<string, mixed\>\> but returns array\<int, array\{id\: int\<0, max\>, title\: string, days\: list\<string\>, start_time\: non\-falsy\-string, minutes\: int\<0, max\>, from\: mixed, until\: mixed\}\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Method App\\Services\\Assistant\\AssistantTools\:\:listTasks\(\) should return list\<array\<string, mixed\>\> but returns array\<int, array\{id\: int\<0, max\>, title\: string, due\: string\|null, priority\: string, has_time_planned\: bool, from\: string, done\: bool\}\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Method App\\Services\\Assistant\\AssistantTools\:\:schedule\(\) should return list\<array\<string, mixed\>\> but returns array\<int, array\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Routine\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,string\>\:\:map\(\) expects callable\(string, 0\)\: non\-falsy\-string, Closure\(array\)\: non\-falsy\-string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Parameter \#1 \$candidates of method App\\Services\\Assistant\\AssistantTools\:\:pick\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\Routine\|App\\Models\\Task\>, Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Routine\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Parameter \#1 \$candidates of method App\\Services\\Assistant\\AssistantTools\:\:pick\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\Routine\|App\\Models\\Task\>, Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Task\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Parameter \#1 \$days of method App\\Services\\Assistant\\AssistantTools\:\:dayList\(\) expects list\<int\>, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Parameter \#1 \$days of method App\\Services\\Assistant\\AssistantTools\:\:dayNames\(\) expects list\<int\>, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Parameter \#1 \$value of function collect expects Illuminate\\Contracts\\Support\\Arrayable\<\*NEVER\*, \*NEVER\*\>\|iterable\<\*NEVER\*, \*NEVER\*\>\|null, array\{\}\|string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Parameter \#3 \$start of method App\\Services\\Assistant\\AssistantTools\:\:entry\(\) expects DateTimeInterface, string\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Parameter \#4 \$end of method App\\Services\\Assistant\\AssistantTools\:\:entry\(\) expects DateTimeInterface, string\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Return type of call to method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Routine\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: method.unresolvableReturnType
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Return type of call to method Illuminate\\Support\\Collection\<int,array\<string, mixed\>\>\:\:all\(\) contains unresolvable type\.$#'
+			identifier: method.unresolvableReturnType
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Assistant/AssistantTools.php
+
+		-
+			message: '#^Cannot call method __invoke\(\) on callable\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Services/Assistant/OllamaClient.php
+
+		-
+			message: '#^Parameter \#6 \$subject of method App\\Services\\Assistant\\ActionLog\:\:record\(\) expects array\{type\: string, id\: int\|null, title\: string, changes\: list\<array\{label\: string, from\: string\|null, to\: string\|null\}\>\}\|null, array\<string, mixed\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Assistant/ProposalExecutor.php
+
+		-
+			message: '#^Method App\\Services\\Canvas\\CanvasClient\:\:paginate\(\) should return list\<array\<string, mixed\>\> but returns array\<mixed, mixed\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/Canvas/CanvasClient.php
+
+		-
+			message: '#^Cannot access property \$timestamp on string\.$#'
+			identifier: property.nonObject
+			count: 1
+			path: app/Services/Canvas/CanvasSync.php
+
+		-
+			message: '#^Property App\\Models\\CanvasAssignment\:\:\$user_id \(int\<0, max\>\) does not accept int\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: app/Services/Canvas/CanvasSync.php
+
+		-
+			message: '#^Cannot call method subMinute\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Services/GoogleCalendar/GoogleCalendarClient.php
+
+		-
+			message: '#^Method App\\Services\\GoogleCalendar\\GoogleCalendarClient\:\:calendars\(\) should return list\<array\{id\: string, name\: string, primary\: bool, writable\: bool, color\: string\|null\}\> but returns array\<array\{id\: mixed, name\: mixed, primary\: bool, writable\: bool, color\: mixed\}\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/GoogleCalendar/GoogleCalendarClient.php
+
+		-
+			message: '#^Method App\\Services\\GoogleCalendar\\GoogleCalendarClient\:\:events\(\) should return list\<array\<string, mixed\>\> but returns array\<mixed\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/GoogleCalendar/GoogleCalendarClient.php
+
+		-
+			message: '#^Unable to resolve the template type TKey in call to function collect$#'
+			identifier: argument.templateType
+			count: 1
+			path: app/Services/GoogleCalendar/GoogleCalendarClient.php
+
+		-
+			message: '#^Unable to resolve the template type TValue in call to function collect$#'
+			identifier: argument.templateType
+			count: 1
+			path: app/Services/GoogleCalendar/GoogleCalendarClient.php
+
+		-
+			message: '#^Argument of an invalid type string supplied for foreach, only iterables are supported\.$#'
+			identifier: foreach.nonIterable
+			count: 1
+			path: app/Services/GoogleCalendar/GoogleCalendarEvents.php
+
+		-
+			message: '#^Property App\\Models\\CalendarEvent\:\:\$responsibility_id \(int\<0, max\>\|null\) does not accept int\|null\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: app/Services/GoogleCalendar/GoogleEventImporter.php
+
+		-
+			message: '#^Property App\\Models\\Routine\:\:\$responsibility_id \(int\<0, max\>\|null\) does not accept int\|null\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: app/Services/GoogleCalendar/GoogleEventImporter.php
+
+		-
+			message: '#^Property App\\Models\\Task\:\:\$responsibility_id \(int\<0, max\>\|null\) does not accept int\|null\.$#'
+			identifier: assign.propertyType
+			count: 2
+			path: app/Services/GoogleCalendar/GoogleEventImporter.php
+
+		-
+			message: '#^Argument of an invalid type string supplied for foreach, only iterables are supported\.$#'
+			identifier: foreach.nonIterable
+			count: 1
+			path: app/Services/GoogleCalendar/GoogleMigration.php
+
+		-
+			message: '#^Dead catch \- App\\Services\\GoogleCalendar\\GoogleApiException is never thrown in the try block\.$#'
+			identifier: catch.neverThrown
+			count: 1
+			path: app/Services/GoogleCalendar/GoogleMigration.php
+
+		-
+			message: '#^Dead catch \- App\\Services\\GoogleCalendar\\GoogleReconnectRequired is never thrown in the try block\.$#'
+			identifier: catch.neverThrown
+			count: 1
+			path: app/Services/GoogleCalendar/GoogleMigration.php
+
+		-
+			message: '#^Dead catch \- Illuminate\\Http\\Client\\ConnectionException is never thrown in the try block\.$#'
+			identifier: catch.neverThrown
+			count: 1
+			path: app/Services/GoogleCalendar/GoogleMigration.php
+
+		-
+			message: '#^Cannot call method diffInSeconds\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: app/Services/Pomodoro/PomodoroService.php
+
+		-
+			message: '#^Cannot call method lt\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Services/Pomodoro/PomodoroService.php
+
+		-
+			message: '#^Cannot call method setTimezone\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Services/Pomodoro/PomodoroService.php
+
+		-
+			message: '#^Cannot call method utc\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: app/Services/Pomodoro/PomodoroService.php
+
+		-
+			message: '#^Parameter \#1 \$date of static method Carbon\\CarbonImmutable\:\:instance\(\) expects DateTimeInterface, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Pomodoro/PomodoroService.php
+
+		-
+			message: '#^Parameter \#1 \$date of static method Carbon\\CarbonImmutable\:\:instance\(\) expects DateTimeInterface, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Pomodoro/PomodoroService.php
+
+		-
+			message: '#^Unable to resolve the template type TGroupKey in call to method Illuminate\\Support\\Collection\<int,App\\Models\\PomodoroSession\>\:\:groupBy\(\)$#'
+			identifier: argument.templateType
+			count: 1
+			path: app/Services/Pomodoro/PomodoroService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>user_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: database/factories/CanvasAssignmentFactory.php

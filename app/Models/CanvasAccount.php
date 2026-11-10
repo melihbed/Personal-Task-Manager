@@ -25,11 +25,13 @@ class CanvasAccount extends Model
         ];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<Responsibility, $this> */
     public function responsibility(): BelongsTo
     {
         return $this->belongsTo(Responsibility::class);

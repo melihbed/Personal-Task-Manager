@@ -1,7 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { breakLabel, formatClock, secondsLeft, type ActiveTimer, type TimerState } from '../../resources/js/lib/pomodoro';
+import {
+    breakLabel,
+    formatClock,
+    secondsLeft,
+    type ActiveTimer,
+    type TimerState,
+} from '../../resources/js/lib/pomodoro';
 
-const timer = (overrides: Partial<ActiveTimer> = {}): ActiveTimer => ({ id: 1, kind: 'focus', status: 'running', task_id: null, task_title: null, planned_seconds: 3000, remaining_seconds: 1000, ...overrides });
+const timer = (overrides: Partial<ActiveTimer> = {}): ActiveTimer => ({
+    id: 1,
+    kind: 'focus',
+    status: 'running',
+    task_id: null,
+    task_title: null,
+    planned_seconds: 3000,
+    remaining_seconds: 1000,
+    ...overrides,
+});
 
 describe('formatClock', () => {
     it('shows minutes and seconds, and hours only when needed', () => {
@@ -37,8 +52,17 @@ describe('secondsLeft', () => {
 
 describe('breakLabel', () => {
     const state = (next_break: 'short_break' | 'long_break'): TimerState => ({
-        settings: { focus_minutes: 50, short_break_minutes: 10, long_break_minutes: 30, rounds_before_long: 3, sound_enabled: true },
-        active: null, cycle: { done: 0, of: 3, next_break }, last_completed: null, server_now: '',
+        settings: {
+            focus_minutes: 50,
+            short_break_minutes: 10,
+            long_break_minutes: 30,
+            rounds_before_long: 3,
+            sound_enabled: true,
+        },
+        active: null,
+        cycle: { done: 0, of: 3, next_break },
+        last_completed: null,
+        server_now: '',
     });
 
     it('names the break that comes next', () => {

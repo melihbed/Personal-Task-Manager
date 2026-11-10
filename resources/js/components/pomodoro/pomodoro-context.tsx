@@ -1,6 +1,27 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ReactNode,
+} from 'react';
 import { ApiError } from '../../lib/http';
-import { breakLabel, controlTimer, formatClock, kindLabels, loadState, saveSettings as saveSettingsRequest, secondsLeft as computeSecondsLeft, startTimer, type Settings, type TimerKind, type TimerState } from '../../lib/pomodoro';
+import {
+    breakLabel,
+    controlTimer,
+    formatClock,
+    kindLabels,
+    loadState,
+    saveSettings as saveSettingsRequest,
+    secondsLeft as computeSecondsLeft,
+    startTimer,
+    type Settings,
+    type TimerKind,
+    type TimerState,
+} from '../../lib/pomodoro';
 import { useCompanion } from '../companion/companion-context';
 
 type Pomodoro = {
@@ -25,7 +46,8 @@ const PomodoroContext = createContext<Pomodoro | null>(null);
 export function usePomodoro(): Pomodoro {
     const value = useContext(PomodoroContext);
 
-    if (value === null) throw new Error('usePomodoro needs a PomodoroProvider.');
+    if (value === null)
+        throw new Error('usePomodoro needs a PomodoroProvider.');
 
     return value;
 }
@@ -41,8 +63,14 @@ function playChime() {
             oscillator.type = 'sine';
             oscillator.frequency.value = frequency;
             gain.gain.setValueAtTime(0.0001, audio.currentTime + start);
-            gain.gain.exponentialRampToValueAtTime(0.18, audio.currentTime + start + 0.04);
-            gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + start + 0.9);
+            gain.gain.exponentialRampToValueAtTime(
+                0.18,
+                audio.currentTime + start + 0.04,
+            );
+            gain.gain.exponentialRampToValueAtTime(
+                0.0001,
+                audio.currentTime + start + 0.9,
+            );
             oscillator.connect(gain).connect(audio.destination);
             oscillator.start(audio.currentTime + start);
             oscillator.stop(audio.currentTime + start + 1);
@@ -58,13 +86,21 @@ function playChime() {
 
 function notify(title: string, body: string) {
     try {
-        if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && document.hidden) new Notification(title, { body });
+        if (
+            typeof Notification !== 'undefined' &&
+            Notification.permission === 'granted' &&
+            document.hidden
+        )
+            new Notification(title, { body });
     } catch {
         // Notifications are optional.
     }
 }
 
-const errorText = (problem: unknown) => problem instanceof ApiError ? problem.message : 'Something went wrong. Please try again.';
+const errorText = (problem: unknown) =>
+    problem instanceof ApiError
+        ? problem.message
+        : 'Something went wrong. Please try again.';
 
 /** The Pomodoro timer, shared by the Focus page, the fox in the sidebar and the browser tab title. */
 export function PomodoroProvider({ children }: { children: ReactNode }) {
@@ -83,13 +119,21 @@ export function PomodoroProvider({ children }: { children: ReactNode }) {
         setReceivedAt(Date.now());
     }, []);
 
-    const refresh = useCallback(() => loadState().then(apply).catch(() => undefined), [apply]);
+    const refresh = useCallback(
+        () =>
+            loadState()
+                .then(apply)
+                .catch(() => undefined),
+        [apply],
+    );
 
     useEffect(() => {
         baseTitle.current = document.title;
         void refresh();
 
-        const onVisible = () => { if (!document.hidden) void refresh(); };
+        const onVisible = () => {
+            if (!document.hidden) void refresh();
+        };
 
         document.addEventListener('visibilitychange', onVisible);
 
@@ -112,28 +156,40 @@ export function PomodoroProvider({ children }: { children: ReactNode }) {
 
     // When the clock reaches zero, ask the server to count the round. The server has the final say.
     useEffect(() => {
-        if (!active || active.status !== 'running' || left === null || left > 0 || completing.current === active.id) return;
+        if (
+            !active ||
+            active.status !== 'running' ||
+            left === null ||
+            left > 0 ||
+            completing.current === active.id
+        )
+            return;
 
         const { id, kind } = active;
 
         completing.current = id;
 
-        controlTimer(id, 'complete').then((next) => {
-            apply(next);
-            setFinished(kind);
+        controlTimer(id, 'complete')
+            .then((next) => {
+                apply(next);
+                setFinished(kind);
 
-            if (next.settings.sound_enabled) playChime();
+                if (next.settings.sound_enabled) playChime();
 
-            if (kind === 'focus') {
-                celebrate();
-                notify('Focus round done', `Take a ${breakLabel(next)}.`);
-            } else {
-                notify('Break over', 'Ready for the next round?');
-            }
-        }).catch(() => {
-            // Most likely the browser clock ran a little fast; look again in a moment.
-            window.setTimeout(() => { completing.current = null; void refresh(); }, 2000);
-        });
+                if (kind === 'focus') {
+                    celebrate();
+                    notify('Focus round done', `Take a ${breakLabel(next)}.`);
+                } else {
+                    notify('Break over', 'Ready for the next round?');
+                }
+            })
+            .catch(() => {
+                // Most likely the browser clock ran a little fast; look again in a moment.
+                window.setTimeout(() => {
+                    completing.current = null;
+                    void refresh();
+                }, 2000);
+            });
     }, [active, left, apply, celebrate, refresh]);
 
     useEffect(() => {
@@ -141,56 +197,75 @@ export function PomodoroProvider({ children }: { children: ReactNode }) {
 
         document.title = `${formatClock(left)} ${kindLabels[active.kind]}${active.status === 'paused' ? ' (paused)' : ''}`;
 
-        return () => { document.title = baseTitle.current; };
+        return () => {
+            document.title = baseTitle.current;
+        };
     }, [active, left]);
 
-    const run = useCallback(async (action: () => Promise<TimerState>) => {
-        setBusy(true);
-        setError('');
-
-        try {
-            apply(await action());
-        } catch (problem) {
-            setError(errorText(problem));
-        } finally {
-            setBusy(false);
-        }
-    }, [apply]);
-
-    const value = useMemo<Pomodoro>(() => ({
-        state,
-        secondsLeft: left,
-        busy,
-        error,
-        finished,
-        start: async (kind, taskId = null) => {
-            // Asking for permission needs a click, and starting a timer is one.
-            if (typeof Notification !== 'undefined' && Notification.permission === 'default') void Notification.requestPermission();
-
-            setFinished(null);
-            await run(() => startTimer(kind, taskId));
-        },
-        pause: () => run(() => controlTimer(active!.id, 'pause')),
-        resume: () => run(() => controlTimer(active!.id, 'resume')),
-        stop: () => { setFinished(null); return run(() => controlTimer(active!.id, 'abandon')); },
-        dismissFinished: () => setFinished(null),
-        updateSettings: async (settings) => {
+    const run = useCallback(
+        async (action: () => Promise<TimerState>) => {
             setBusy(true);
             setError('');
 
             try {
-                apply(await saveSettingsRequest(settings));
-
-                return true;
+                apply(await action());
             } catch (problem) {
                 setError(errorText(problem));
-
-                return false;
             } finally {
                 setBusy(false);
             }
         },
-    }), [state, left, busy, error, finished, active, run, apply]);
+        [apply],
+    );
 
-    return <PomodoroContext.Provider value={value}>{children}</PomodoroContext.Provider>;
+    const value = useMemo<Pomodoro>(
+        () => ({
+            state,
+            secondsLeft: left,
+            busy,
+            error,
+            finished,
+            start: async (kind, taskId = null) => {
+                // Asking for permission needs a click, and starting a timer is one.
+                if (
+                    typeof Notification !== 'undefined' &&
+                    Notification.permission === 'default'
+                )
+                    void Notification.requestPermission();
+
+                setFinished(null);
+                await run(() => startTimer(kind, taskId));
+            },
+            pause: () => run(() => controlTimer(active!.id, 'pause')),
+            resume: () => run(() => controlTimer(active!.id, 'resume')),
+            stop: () => {
+                setFinished(null);
+                return run(() => controlTimer(active!.id, 'abandon'));
+            },
+            dismissFinished: () => setFinished(null),
+            updateSettings: async (settings) => {
+                setBusy(true);
+                setError('');
+
+                try {
+                    apply(await saveSettingsRequest(settings));
+
+                    return true;
+                } catch (problem) {
+                    setError(errorText(problem));
+
+                    return false;
+                } finally {
+                    setBusy(false);
+                }
+            },
+        }),
+        [state, left, busy, error, finished, active, run, apply],
+    );
+
+    return (
+        <PomodoroContext.Provider value={value}>
+            {children}
+        </PomodoroContext.Provider>
+    );
 }

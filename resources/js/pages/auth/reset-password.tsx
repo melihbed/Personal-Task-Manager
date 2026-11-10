@@ -29,7 +29,11 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
         <AuthLayout
             title="Reset your password"
             description="Choose a new password for your account."
-            footer={<Link href="/login" className="pm-link">Back to log in</Link>}
+            footer={
+                <Link href="/login" className="pm-link">
+                    Back to log in
+                </Link>
+            }
         >
             <form onSubmit={submit} className="space-y-4">
                 <Field
@@ -48,7 +52,9 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                     type="password"
                     autoComplete="new-password"
                     value={data.password}
-                    onChange={(event) => setData('password', event.target.value)}
+                    onChange={(event) =>
+                        setData('password', event.target.value)
+                    }
                     error={errors.password}
                     required
                 />
@@ -58,12 +64,19 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                     type="password"
                     autoComplete="new-password"
                     value={data.password_confirmation}
-                    onChange={(event) => setData('password_confirmation', event.target.value)}
+                    onChange={(event) =>
+                        setData('password_confirmation', event.target.value)
+                    }
                     error={errors.password_confirmation}
                     required
                 />
 
-                <Button type="submit" loading={processing} loadingLabel="Resetting password" className="w-full">
+                <Button
+                    type="submit"
+                    loading={processing}
+                    loadingLabel="Resetting password"
+                    className="w-full"
+                >
                     Reset password
                 </Button>
             </form>

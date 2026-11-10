@@ -25,11 +25,13 @@ class AssistantAction extends Model
         return ['changes' => 'array'];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<AssistantMessage, $this> */
     public function message(): BelongsTo
     {
         return $this->belongsTo(AssistantMessage::class, 'assistant_message_id');

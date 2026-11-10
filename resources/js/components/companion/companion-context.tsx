@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ReactNode,
+} from 'react';
 
 type Companion = {
     /** The fox is jumping for joy: something good just happened. */
@@ -11,7 +20,12 @@ type Companion = {
 
 const CELEBRATION_MS = 2600;
 
-const CompanionContext = createContext<Companion>({ celebrating: false, thinking: false, celebrate: () => {}, setThinking: () => {} });
+const CompanionContext = createContext<Companion>({
+    celebrating: false,
+    thinking: false,
+    celebrate: () => {},
+    setThinking: () => {},
+});
 
 export const useCompanion = () => useContext(CompanionContext);
 
@@ -24,12 +38,22 @@ export function CompanionProvider({ children }: { children: ReactNode }) {
     const celebrate = useCallback(() => {
         window.clearTimeout(timer.current);
         setCelebrating(true);
-        timer.current = window.setTimeout(() => setCelebrating(false), CELEBRATION_MS);
+        timer.current = window.setTimeout(
+            () => setCelebrating(false),
+            CELEBRATION_MS,
+        );
     }, []);
 
     useEffect(() => () => window.clearTimeout(timer.current), []);
 
-    const value = useMemo(() => ({ celebrating, thinking, celebrate, setThinking }), [celebrating, thinking, celebrate]);
+    const value = useMemo(
+        () => ({ celebrating, thinking, celebrate, setThinking }),
+        [celebrating, thinking, celebrate],
+    );
 
-    return <CompanionContext.Provider value={value}>{children}</CompanionContext.Provider>;
+    return (
+        <CompanionContext.Provider value={value}>
+            {children}
+        </CompanionContext.Provider>
+    );
 }

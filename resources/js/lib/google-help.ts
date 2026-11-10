@@ -1,5 +1,7 @@
 /** A step in a help topic. A step with a link shows the link after its text. */
-export type HelpStep = string | { text: string; href: string; linkLabel: string };
+export type HelpStep =
+    | string
+    | { text: string; href: string; linkLabel: string };
 
 export type HelpItem = {
     id: string;
@@ -12,7 +14,8 @@ export type HelpItem = {
 export const googleConsoleLinks = {
     audience: 'https://console.cloud.google.com/auth/audience',
     credentials: 'https://console.cloud.google.com/apis/credentials',
-    calendarApi: 'https://console.cloud.google.com/apis/library/calendar-json.googleapis.com',
+    calendarApi:
+        'https://console.cloud.google.com/apis/library/calendar-json.googleapis.com',
 };
 
 /**
@@ -26,7 +29,11 @@ export function troubleshootingItems(redirectUri: string): HelpItem[] {
             title: '“Access blocked: … has not completed the Google verification process” (Error 403: access_denied)',
             cause: 'Your Google app is in Testing mode, so only accounts on its list of test users can connect. The account you signed in with is not on that list yet.',
             steps: [
-                { text: 'Open the Audience page in the Google Cloud console:', href: googleConsoleLinks.audience, linkLabel: 'Audience' },
+                {
+                    text: 'Open the Audience page in the Google Cloud console:',
+                    href: googleConsoleLinks.audience,
+                    linkLabel: 'Audience',
+                },
                 'Under “Test users”, choose “Add users”.',
                 'Enter the exact Google account email you are signing in with (the one shown on the error screen), then save.',
                 'Wait a minute, come back here, and choose Connect again.',
@@ -47,7 +54,11 @@ export function troubleshootingItems(redirectUri: string): HelpItem[] {
             title: 'Error 400: redirect_uri_mismatch',
             cause: 'The redirect URI registered in Google does not match the one this app sends. It must match character for character.',
             steps: [
-                { text: 'Open your OAuth client in the Google Cloud console:', href: googleConsoleLinks.credentials, linkLabel: 'Credentials' },
+                {
+                    text: 'Open your OAuth client in the Google Cloud console:',
+                    href: googleConsoleLinks.credentials,
+                    linkLabel: 'Credentials',
+                },
                 `Under “Authorized redirect URIs”, add exactly: ${redirectUri}`,
                 'Check the scheme (http or https), the host, the port, and that there is no trailing slash. Save and wait a few minutes.',
             ],
@@ -66,7 +77,11 @@ export function troubleshootingItems(redirectUri: string): HelpItem[] {
             title: 'Connected, but calendars do not load',
             cause: 'The Google Calendar API is not turned on for your Google Cloud project.',
             steps: [
-                { text: 'Open the Calendar API page and choose Enable:', href: googleConsoleLinks.calendarApi, linkLabel: 'Google Calendar API' },
+                {
+                    text: 'Open the Calendar API page and choose Enable:',
+                    href: googleConsoleLinks.calendarApi,
+                    linkLabel: 'Google Calendar API',
+                },
                 'Come back here and choose “Try again” in the calendar list.',
             ],
         },

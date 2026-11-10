@@ -5,7 +5,10 @@ import type { FoxMood } from './fox';
 
 /** Late at night the fox is asleep. */
 function useIsNight(): boolean {
-    const check = () => { const hour = new Date().getHours(); return hour >= 23 || hour < 6; };
+    const check = () => {
+        const hour = new Date().getHours();
+        return hour >= 23 || hour < 6;
+    };
     const [night, setNight] = useState(check);
 
     useEffect(() => {

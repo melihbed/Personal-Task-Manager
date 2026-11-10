@@ -4,7 +4,11 @@ import { useEffect, useState } from 'react';
  * State remembered in this browser (a per-viewer convenience). Storage can be unavailable or hold an
  * old value, so every read and write is guarded and the value is validated before use.
  */
-export function useStoredState<T extends string | number>(key: string, initial: T, isValid: (value: unknown) => value is T): [T, (value: T) => void] {
+export function useStoredState<T extends string | number>(
+    key: string,
+    initial: T,
+    isValid: (value: unknown) => value is T,
+): [T, (value: T) => void] {
     const [value, setValue] = useState<T>(initial);
 
     useEffect(() => {

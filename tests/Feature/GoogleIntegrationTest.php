@@ -3,6 +3,7 @@
 use App\Models\GoogleAccount;
 use App\Models\User;
 use App\Services\GoogleCalendar\GoogleCalendarBranding;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -331,6 +332,11 @@ describe('settings', function () {
 });
 
 describe('showing Google events on the planner calendar', function () {
+    // These tests view the week of 2026-10-05. Pin "now" inside that week so the
+    // Today panel doesn't make its own Google request (it does when today is outside
+    // the visible week), which would make the request counts depend on the real date.
+    beforeEach(fn () => $this->travelTo(CarbonImmutable::parse('2026-10-07 12:00', 'America/New_York')));
+
     function googleEvents(): array
     {
         return [

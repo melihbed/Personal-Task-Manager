@@ -19,27 +19,35 @@ class Task extends Model
         return ['due_at' => 'datetime', 'due_has_time' => 'boolean', 'completed_at' => 'datetime'];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<Responsibility, $this> */
     public function responsibility(): BelongsTo
     {
         return $this->belongsTo(Responsibility::class);
     }
 
+    /** @return HasMany<CalendarSession, $this> */
     public function calendarSessions(): HasMany
     {
         return $this->hasMany(CalendarSession::class);
     }
 
-    /** The Canvas assignment this task was made from, if any. */
+    /**
+     * The Canvas assignment this task was made from, if any.
+     *
+     * @return HasOne<CanvasAssignment, $this>
+     */
     public function canvasAssignment(): HasOne
     {
         return $this->hasOne(CanvasAssignment::class);
     }
 
+    /** @return HasMany<PomodoroSession, $this> */
     public function pomodoroSessions(): HasMany
     {
         return $this->hasMany(PomodoroSession::class);

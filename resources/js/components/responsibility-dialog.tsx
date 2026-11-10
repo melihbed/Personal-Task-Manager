@@ -16,7 +16,10 @@ const colors = [
 
 type Props = { existingCount: number; onClose: () => void };
 
-export default function ResponsibilityDialog({ existingCount, onClose }: Props) {
+export default function ResponsibilityDialog({
+    existingCount,
+    onClose,
+}: Props) {
     const dialog = useRef<HTMLDialogElement>(null);
     const [showDescription, setShowDescription] = useState(false);
     const { data, setData, post, processing, errors } = useForm({
@@ -25,12 +28,17 @@ export default function ResponsibilityDialog({ existingCount, onClose }: Props) 
         color: colors[existingCount % colors.length].value,
     });
 
-    useEffect(() => { dialog.current?.showModal(); }, []);
+    useEffect(() => {
+        dialog.current?.showModal();
+    }, []);
 
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
-        post('/responsibilities', { preserveScroll: true, onSuccess: () => onClose() });
+        post('/responsibilities', {
+            preserveScroll: true,
+            onSuccess: () => onClose(),
+        });
     }
 
     return (
@@ -38,11 +46,16 @@ export default function ResponsibilityDialog({ existingCount, onClose }: Props) 
             ref={dialog}
             aria-labelledby="responsibility-title"
             className="pm-dialog"
-            onCancel={(event) => { if (processing) event.preventDefault(); else onClose(); }}
+            onCancel={(event) => {
+                if (processing) event.preventDefault();
+                else onClose();
+            }}
             onClose={onClose}
         >
             <form onSubmit={submit} className="space-y-5">
-                <h2 id="responsibility-title" className="text-xl font-medium">New responsibility</h2>
+                <h2 id="responsibility-title" className="text-xl font-medium">
+                    New responsibility
+                </h2>
 
                 <Field
                     id="responsibility-name"
@@ -66,7 +79,9 @@ export default function ResponsibilityDialog({ existingCount, onClose }: Props) 
                                     name="color"
                                     value={color.value}
                                     checked={data.color === color.value}
-                                    onChange={() => setData('color', color.value)}
+                                    onChange={() =>
+                                        setData('color', color.value)
+                                    }
                                     className="peer sr-only"
                                 />
                                 <span
@@ -77,29 +92,65 @@ export default function ResponsibilityDialog({ existingCount, onClose }: Props) 
                             </label>
                         ))}
                     </div>
-                    {errors.color && <p role="alert" className="mt-1 text-sm text-red-700">{errors.color}</p>}
+                    {errors.color && (
+                        <p role="alert" className="mt-1 text-sm text-red-700">
+                            {errors.color}
+                        </p>
+                    )}
                 </fieldset>
 
                 {showDescription ? (
                     <div>
-                        <label htmlFor="responsibility-description" className="text-sm font-medium">Description</label>
+                        <label
+                            htmlFor="responsibility-description"
+                            className="text-sm font-medium"
+                        >
+                            Description
+                        </label>
                         <textarea
                             id="responsibility-description"
                             rows={3}
                             maxLength={5000}
                             value={data.description}
-                            onChange={(event) => setData('description', event.target.value)}
+                            onChange={(event) =>
+                                setData('description', event.target.value)
+                            }
                             className="pm-input"
                         />
-                        {errors.description && <p role="alert" className="mt-1 text-sm text-red-700">{errors.description}</p>}
+                        {errors.description && (
+                            <p
+                                role="alert"
+                                className="mt-1 text-sm text-red-700"
+                            >
+                                {errors.description}
+                            </p>
+                        )}
                     </div>
                 ) : (
-                    <button type="button" onClick={() => setShowDescription(true)} className="pm-link text-sm">Add description</button>
+                    <button
+                        type="button"
+                        onClick={() => setShowDescription(true)}
+                        className="pm-link text-sm"
+                    >
+                        Add description
+                    </button>
                 )}
 
                 <div className="pm-button-group justify-end">
-                    <Button type="button" variant="secondary" disabled={processing} onClick={onClose}>Cancel</Button>
-                    <Button type="submit" loading={processing} loadingLabel="Saving responsibility" disabled={!data.name.trim()}>
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={processing}
+                        onClick={onClose}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        type="submit"
+                        loading={processing}
+                        loadingLabel="Saving responsibility"
+                        disabled={!data.name.trim()}
+                    >
                         Add responsibility
                     </Button>
                 </div>

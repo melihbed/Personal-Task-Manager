@@ -1,7 +1,17 @@
 import { router, useForm } from '@inertiajs/react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { addDays, dateLabel, zonedParts, type PlannerRoutine } from '../lib/planner';
-import { dayPresets, formatLength, routineSummary, weekdays } from '../lib/routines';
+import {
+    addDays,
+    dateLabel,
+    zonedParts,
+    type PlannerRoutine,
+} from '../lib/planner';
+import {
+    dayPresets,
+    formatLength,
+    routineSummary,
+    weekdays,
+} from '../lib/routines';
 import Button from './ui/button';
 import Field from './ui/field';
 
@@ -16,7 +26,12 @@ type Props = {
 
 const lengths = [15, 30, 45, 60, 90, 120, 180, 240];
 
-export default function RoutineDialog({ routine, responsibilities, timezone, onClose }: Props) {
+export default function RoutineDialog({
+    routine,
+    responsibilities,
+    timezone,
+    onClose,
+}: Props) {
     const dialog = useRef<HTMLDialogElement>(null);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -41,7 +56,9 @@ export default function RoutineDialog({ routine, responsibilities, timezone, onC
         ends_on: routine?.ends_on ?? null,
     });
 
-    useEffect(() => { dialog.current?.showModal(); }, []);
+    useEffect(() => {
+        dialog.current?.showModal();
+    }, []);
 
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -56,27 +73,53 @@ export default function RoutineDialog({ routine, responsibilities, timezone, onC
         if (!routine) return;
 
         setDeleting(true);
-        router.delete(`/routines/${routine.id}`, { preserveScroll: true, onSuccess: () => onClose(), onFinish: () => setDeleting(false) });
+        router.delete(`/routines/${routine.id}`, {
+            preserveScroll: true,
+            onSuccess: () => onClose(),
+            onFinish: () => setDeleting(false),
+        });
     }
 
     function restore(date: string) {
         if (!routine) return;
 
-        router.patch(`/routines/${routine.id}/occurrences/${date}`, { skipped: false }, { preserveScroll: true });
+        router.patch(
+            `/routines/${routine.id}/occurrences/${date}`,
+            { skipped: false },
+            { preserveScroll: true },
+        );
     }
 
     function toggleDay(day: number) {
-        setData('days', data.days.includes(day) ? data.days.filter((selected) => selected !== day) : [...data.days, day].sort((a, b) => a - b));
+        setData(
+            'days',
+            data.days.includes(day)
+                ? data.days.filter((selected) => selected !== day)
+                : [...data.days, day].sort((a, b) => a - b),
+        );
     }
 
     const busy = processing || deleting;
     const messages = Object.values(errors);
-    const durationOptions = lengths.includes(data.duration_minutes) ? lengths : [...lengths, data.duration_minutes].sort((a, b) => a - b);
+    const durationOptions = lengths.includes(data.duration_minutes)
+        ? lengths
+        : [...lengths, data.duration_minutes].sort((a, b) => a - b);
     const summary = data.days.length
         ? routineSummary(
-            { days: data.days, start_time: data.start_time, duration_minutes: data.duration_minutes, ends_on: data.ends_on },
-            data.ends_on ? dateLabel(data.ends_on, { month: 'short', day: 'numeric', year: 'numeric' }) : undefined,
-        )
+              {
+                  days: data.days,
+                  start_time: data.start_time,
+                  duration_minutes: data.duration_minutes,
+                  ends_on: data.ends_on,
+              },
+              data.ends_on
+                  ? dateLabel(data.ends_on, {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                    })
+                  : undefined,
+          )
         : 'Choose the days this repeats on.';
 
     return (
@@ -84,11 +127,16 @@ export default function RoutineDialog({ routine, responsibilities, timezone, onC
             ref={dialog}
             aria-labelledby="routine-title"
             className="pm-dialog"
-            onCancel={(event) => { if (busy) event.preventDefault(); else onClose(); }}
+            onCancel={(event) => {
+                if (busy) event.preventDefault();
+                else onClose();
+            }}
             onClose={onClose}
         >
             <form onSubmit={submit} className="space-y-5">
-                <h2 id="routine-title" className="text-xl font-medium">{routine ? 'Edit routine' : 'New routine'}</h2>
+                <h2 id="routine-title" className="text-xl font-medium">
+                    {routine ? 'Edit routine' : 'New routine'}
+                </h2>
 
                 <Field
                     id="routine-name"
@@ -103,16 +151,33 @@ export default function RoutineDialog({ routine, responsibilities, timezone, onC
                 />
 
                 <div>
-                    <label htmlFor="routine-responsibility" className="text-sm font-medium">Responsibility</label>
+                    <label
+                        htmlFor="routine-responsibility"
+                        className="text-sm font-medium"
+                    >
+                        Responsibility
+                    </label>
                     <select
                         id="routine-responsibility"
                         value={data.responsibility_id ?? ''}
-                        onChange={(event) => setData('responsibility_id', event.target.value === '' ? null : Number(event.target.value))}
+                        onChange={(event) =>
+                            setData(
+                                'responsibility_id',
+                                event.target.value === ''
+                                    ? null
+                                    : Number(event.target.value),
+                            )
+                        }
                         className="pm-input cursor-pointer"
                     >
                         <option value="">Inbox</option>
                         {responsibilities.map((responsibility) => (
-                            <option key={responsibility.id} value={responsibility.id}>{responsibility.name}</option>
+                            <option
+                                key={responsibility.id}
+                                value={responsibility.id}
+                            >
+                                {responsibility.name}
+                            </option>
                         ))}
                     </select>
                 </div>
@@ -140,45 +205,82 @@ export default function RoutineDialog({ routine, responsibilities, timezone, onC
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
                         {dayPresets.map((preset) => (
-                            <button key={preset.label} type="button" onClick={() => setData('days', preset.days)} className="pm-chip">{preset.label}</button>
+                            <button
+                                key={preset.label}
+                                type="button"
+                                onClick={() => setData('days', preset.days)}
+                                className="pm-chip"
+                            >
+                                {preset.label}
+                            </button>
                         ))}
                     </div>
-                    {errors.days && <p role="alert" className="mt-1 text-sm text-red-700">{errors.days}</p>}
+                    {errors.days && (
+                        <p role="alert" className="mt-1 text-sm text-red-700">
+                            {errors.days}
+                        </p>
+                    )}
                 </fieldset>
 
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label htmlFor="routine-time" className="text-sm font-medium">Starts at</label>
+                        <label
+                            htmlFor="routine-time"
+                            className="text-sm font-medium"
+                        >
+                            Starts at
+                        </label>
                         <input
                             id="routine-time"
                             type="time"
                             required
                             value={data.start_time}
-                            onChange={(event) => setData('start_time', event.target.value)}
+                            onChange={(event) =>
+                                setData('start_time', event.target.value)
+                            }
                             className="pm-input"
                         />
                     </div>
                     <div>
-                        <label htmlFor="routine-length" className="text-sm font-medium">Length</label>
+                        <label
+                            htmlFor="routine-length"
+                            className="text-sm font-medium"
+                        >
+                            Length
+                        </label>
                         <select
                             id="routine-length"
                             value={data.duration_minutes}
-                            onChange={(event) => setData('duration_minutes', Number(event.target.value))}
+                            onChange={(event) =>
+                                setData(
+                                    'duration_minutes',
+                                    Number(event.target.value),
+                                )
+                            }
                             className="pm-input cursor-pointer"
                         >
                             {durationOptions.map((minutes) => (
-                                <option key={minutes} value={minutes}>{formatLength(minutes)}</option>
+                                <option key={minutes} value={minutes}>
+                                    {formatLength(minutes)}
+                                </option>
                             ))}
                         </select>
                     </div>
                     <div>
-                        <label htmlFor="routine-starts" className="text-sm font-medium">Starting</label>
+                        <label
+                            htmlFor="routine-starts"
+                            className="text-sm font-medium"
+                        >
+                            Starting
+                        </label>
                         <input
                             id="routine-starts"
                             type="date"
                             required
                             value={data.starts_on}
-                            onChange={(event) => setData('starts_on', event.target.value)}
+                            onChange={(event) =>
+                                setData('starts_on', event.target.value)
+                            }
                             className="pm-input"
                         />
                     </div>
@@ -186,7 +288,13 @@ export default function RoutineDialog({ routine, responsibilities, timezone, onC
                         <legend className="text-sm font-medium">Ends</legend>
                         <div className="mt-2 space-y-2 text-sm">
                             <label className="flex cursor-pointer items-center gap-2">
-                                <input type="radio" name="routine-ends" checked={data.ends_on === null} onChange={() => setData('ends_on', null)} className="accent-[var(--pm-text)]" />
+                                <input
+                                    type="radio"
+                                    name="routine-ends"
+                                    checked={data.ends_on === null}
+                                    onChange={() => setData('ends_on', null)}
+                                    className="accent-[var(--pm-text)]"
+                                />
                                 Never
                             </label>
                             <label className="flex cursor-pointer items-center gap-2">
@@ -194,7 +302,12 @@ export default function RoutineDialog({ routine, responsibilities, timezone, onC
                                     type="radio"
                                     name="routine-ends"
                                     checked={data.ends_on !== null}
-                                    onChange={() => setData('ends_on', addDays(data.starts_on, 90))}
+                                    onChange={() =>
+                                        setData(
+                                            'ends_on',
+                                            addDays(data.starts_on, 90),
+                                        )
+                                    }
                                     className="accent-[var(--pm-text)]"
                                 />
                                 On date
@@ -204,21 +317,35 @@ export default function RoutineDialog({ routine, responsibilities, timezone, onC
                 </div>
                 {data.ends_on !== null && (
                     <div>
-                        <label htmlFor="routine-ends-on" className="text-sm font-medium">Last day</label>
+                        <label
+                            htmlFor="routine-ends-on"
+                            className="text-sm font-medium"
+                        >
+                            Last day
+                        </label>
                         <input
                             id="routine-ends-on"
                             type="date"
                             min={data.starts_on}
                             value={data.ends_on}
-                            onChange={(event) => setData('ends_on', event.target.value)}
+                            onChange={(event) =>
+                                setData('ends_on', event.target.value)
+                            }
                             className="pm-input"
                         />
                     </div>
                 )}
 
-                <p className="rounded-xl bg-[var(--pm-background)] px-3 py-2 text-sm" aria-live="polite">
+                <p
+                    className="rounded-xl bg-[var(--pm-background)] px-3 py-2 text-sm"
+                    aria-live="polite"
+                >
                     {summary}
-                    {routineTimezone !== timezone && <span className="block text-xs text-[var(--pm-muted)]">Times are in {routineTimezone.replaceAll('_', ' ')}.</span>}
+                    {routineTimezone !== timezone && (
+                        <span className="block text-xs text-[var(--pm-muted)]">
+                            Times are in {routineTimezone.replaceAll('_', ' ')}.
+                        </span>
+                    )}
                 </p>
 
                 {routine && routine.skipped_dates.length > 0 && (
@@ -226,36 +353,111 @@ export default function RoutineDialog({ routine, responsibilities, timezone, onC
                         <p className="text-sm font-medium">Skipped days</p>
                         <ul className="mt-2 space-y-1">
                             {routine.skipped_dates.map((date) => (
-                                <li key={date} className="flex items-center justify-between gap-3 text-sm">
-                                    <span>{dateLabel(date, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                    <Button type="button" variant="secondary" size="small" onClick={() => restore(date)}>Restore</Button>
+                                <li
+                                    key={date}
+                                    className="flex items-center justify-between gap-3 text-sm"
+                                >
+                                    <span>
+                                        {dateLabel(date, {
+                                            weekday: 'short',
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                        })}
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="small"
+                                        onClick={() => restore(date)}
+                                    >
+                                        Restore
+                                    </Button>
                                 </li>
                             ))}
                         </ul>
                     </div>
                 )}
 
-                {messages.filter((message) => message !== errors.title && message !== errors.days).map((message, index) => (
-                    <p key={index} role="alert" className="text-sm text-red-700">{message}</p>
-                ))}
+                {messages
+                    .filter(
+                        (message) =>
+                            message !== errors.title && message !== errors.days,
+                    )
+                    .map((message, index) => (
+                        <p
+                            key={index}
+                            role="alert"
+                            className="text-sm text-red-700"
+                        >
+                            {message}
+                        </p>
+                    ))}
 
                 {confirmingDelete ? (
                     <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm">
-                        <p className="font-medium text-red-900">Delete this routine?</p>
-                        <p className="mt-1 text-red-800">Every event is removed from your calendar. This cannot be undone.</p>
+                        <p className="font-medium text-red-900">
+                            Delete this routine?
+                        </p>
+                        <p className="mt-1 text-red-800">
+                            Every event is removed from your calendar. This
+                            cannot be undone.
+                        </p>
                         <div className="pm-button-group mt-3">
-                            <Button type="button" variant="secondary" size="small" disabled={deleting} onClick={() => setConfirmingDelete(false)}>Keep it</Button>
-                            <Button type="button" variant="danger" size="small" loading={deleting} loadingLabel="Deleting routine" onClick={remove}>Delete routine</Button>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="small"
+                                disabled={deleting}
+                                onClick={() => setConfirmingDelete(false)}
+                            >
+                                Keep it
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="danger"
+                                size="small"
+                                loading={deleting}
+                                loadingLabel="Deleting routine"
+                                onClick={remove}
+                            >
+                                Delete routine
+                            </Button>
                         </div>
                     </div>
                 ) : (
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         {routine ? (
-                            <Button type="button" variant="danger" disabled={busy} onClick={() => setConfirmingDelete(true)}>Delete routine</Button>
-                        ) : <span />}
+                            <Button
+                                type="button"
+                                variant="danger"
+                                disabled={busy}
+                                onClick={() => setConfirmingDelete(true)}
+                            >
+                                Delete routine
+                            </Button>
+                        ) : (
+                            <span />
+                        )}
                         <div className="pm-button-group">
-                            <Button type="button" variant="secondary" disabled={busy} onClick={onClose}>Cancel</Button>
-                            <Button type="submit" loading={processing} loadingLabel="Saving routine" disabled={data.title.trim() === '' || data.days.length === 0 || deleting}>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                disabled={busy}
+                                onClick={onClose}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                loading={processing}
+                                loadingLabel="Saving routine"
+                                disabled={
+                                    data.title.trim() === '' ||
+                                    data.days.length === 0 ||
+                                    deleting
+                                }
+                            >
                                 {routine ? 'Save' : 'Add routine'}
                             </Button>
                         </div>

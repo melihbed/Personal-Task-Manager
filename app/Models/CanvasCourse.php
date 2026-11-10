@@ -20,11 +20,13 @@ class CanvasCourse extends Model
         return ['tracked' => 'boolean'];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return HasMany<CanvasAssignment, $this> */
     public function assignments(): HasMany
     {
         return $this->hasMany(CanvasAssignment::class);

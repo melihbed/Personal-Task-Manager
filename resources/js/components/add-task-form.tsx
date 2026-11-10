@@ -40,14 +40,20 @@ export default function AddTaskForm({
         priority: 'normal',
     });
     const [focused, setFocused] = useState(false);
-    const knownIds = useRef(new Set(responsibilities?.map((responsibility) => responsibility.id)));
+    const knownIds = useRef(
+        new Set(responsibilities?.map((responsibility) => responsibility.id)),
+    );
 
     // A responsibility created from the picker's "New responsibility…" entry is selected automatically.
     useEffect(() => {
         if (!responsibilities) return;
 
-        const added = responsibilities.find((responsibility) => !knownIds.current.has(responsibility.id));
-        knownIds.current = new Set(responsibilities.map((responsibility) => responsibility.id));
+        const added = responsibilities.find(
+            (responsibility) => !knownIds.current.has(responsibility.id),
+        );
+        knownIds.current = new Set(
+            responsibilities.map((responsibility) => responsibility.id),
+        );
 
         if (added) setData('responsibility_id', added.id);
     }, [responsibilities]);
@@ -57,16 +63,34 @@ export default function AddTaskForm({
 
         post('/tasks', {
             preserveScroll: true,
-            onSuccess: () => reset('title', 'due_at', 'due_has_time', 'estimate_minutes', 'priority'),
+            onSuccess: () =>
+                reset(
+                    'title',
+                    'due_at',
+                    'due_has_time',
+                    'estimate_minutes',
+                    'priority',
+                ),
         });
     }
 
     const details = [
-        data.estimate_minutes ? durations.find((duration) => duration.minutes === data.estimate_minutes)?.label : null,
+        data.estimate_minutes
+            ? durations.find(
+                  (duration) => duration.minutes === data.estimate_minutes,
+              )?.label
+            : null,
         data.priority !== 'normal' ? priorityLabels[data.priority] : null,
-    ].filter(Boolean).join(' · ');
+    ]
+        .filter(Boolean)
+        .join(' · ');
     const messages = Object.values(errors);
-    const touched = data.title !== '' || data.due_at !== null || data.estimate_minutes !== null || data.priority !== 'normal' || data.responsibility_id !== responsibilityId;
+    const touched =
+        data.title !== '' ||
+        data.due_at !== null ||
+        data.estimate_minutes !== null ||
+        data.priority !== 'normal' ||
+        data.responsibility_id !== responsibilityId;
     const expanded = focused || touched;
 
     return (
@@ -74,10 +98,17 @@ export default function AddTaskForm({
             onSubmit={submit}
             onFocus={() => setFocused(true)}
             onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
+                if (
+                    !event.currentTarget.contains(
+                        event.relatedTarget as Node | null,
+                    )
+                )
+                    setFocused(false);
             }}
         >
-            <label htmlFor="new-task-title" className="text-sm font-medium">Add a task</label>
+            <label htmlFor="new-task-title" className="text-sm font-medium">
+                Add a task
+            </label>
             <div className="mt-2 flex items-center gap-2">
                 <input
                     id="new-task-title"
@@ -98,85 +129,174 @@ export default function AddTaskForm({
                     title="Add task"
                     className="pm-button--icon"
                 >
-                    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5m-6 6 6-6 6 6" /></svg>
+                    <svg
+                        aria-hidden="true"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    >
+                        <path d="M12 19V5m-6 6 6-6 6 6" />
+                    </svg>
                 </Button>
             </div>
 
             <div className="pm-collapse" data-open={expanded}>
                 <div>
-            <div className="mt-3 flex flex-wrap gap-2" inert={!expanded}>
-                {responsibilities && (
-                    <select
-                        aria-label="Responsibility"
-                        value={data.responsibility_id ?? ''}
-                        onChange={(event) => {
-                            if (event.target.value === NEW_RESPONSIBILITY) {
-                                onCreateResponsibility?.();
-                                return;
-                            }
-                            setData('responsibility_id', event.target.value === '' ? null : Number(event.target.value));
-                        }}
-                        className="pm-chip pm-chip--active max-w-40"
+                    <div
+                        className="mt-3 flex flex-wrap gap-2"
+                        inert={!expanded}
                     >
-                        <option value="">Inbox</option>
-                        {responsibilities.map((responsibility) => (
-                            <option key={responsibility.id} value={responsibility.id}>{responsibility.name}</option>
-                        ))}
-                        {onCreateResponsibility && <option value={NEW_RESPONSIBILITY}>＋ New responsibility…</option>}
-                    </select>
-                )}
+                        {responsibilities && (
+                            <select
+                                aria-label="Responsibility"
+                                value={data.responsibility_id ?? ''}
+                                onChange={(event) => {
+                                    if (
+                                        event.target.value ===
+                                        NEW_RESPONSIBILITY
+                                    ) {
+                                        onCreateResponsibility?.();
+                                        return;
+                                    }
+                                    setData(
+                                        'responsibility_id',
+                                        event.target.value === ''
+                                            ? null
+                                            : Number(event.target.value),
+                                    );
+                                }}
+                                className="pm-chip pm-chip--active max-w-40"
+                            >
+                                <option value="">Inbox</option>
+                                {responsibilities.map((responsibility) => (
+                                    <option
+                                        key={responsibility.id}
+                                        value={responsibility.id}
+                                    >
+                                        {responsibility.name}
+                                    </option>
+                                ))}
+                                {onCreateResponsibility && (
+                                    <option value={NEW_RESPONSIBILITY}>
+                                        ＋ New responsibility…
+                                    </option>
+                                )}
+                            </select>
+                        )}
 
-                <DuePicker
-                    value={data.due_at ? { dueAt: data.due_at, hasTime: data.due_has_time } : null}
-                    onChange={(due) => {
-                        setData((current) => ({
-                            ...current,
-                            due_at: due?.dueAt ?? null,
-                            due_has_time: due?.hasTime ?? true,
-                        }));
-                    }}
-                    timezone={timezone}
-                />
+                        <DuePicker
+                            value={
+                                data.due_at
+                                    ? {
+                                          dueAt: data.due_at,
+                                          hasTime: data.due_has_time,
+                                      }
+                                    : null
+                            }
+                            onChange={(due) => {
+                                setData((current) => ({
+                                    ...current,
+                                    due_at: due?.dueAt ?? null,
+                                    due_has_time: due?.hasTime ?? true,
+                                }));
+                            }}
+                            timezone={timezone}
+                        />
 
-                <Popover ariaLabel="More details" active={details !== ''} label={details || '⋯'}>
-                    {() => (
-                        <div className="space-y-3 px-2.5 py-2">
-                            <div>
-                                <label htmlFor="task-duration" className="text-xs font-medium">How long will it take?</label>
-                                <select
-                                    id="task-duration"
-                                    value={data.estimate_minutes ?? ''}
-                                    onChange={(event) => setData('estimate_minutes', event.target.value === '' ? null : Number(event.target.value))}
-                                    className="pm-input pm-input--flush mt-1.5 px-2.5 py-2 text-xs"
-                                >
-                                    <option value="">Not set</option>
-                                    {durations.map((duration) => (
-                                        <option key={duration.minutes} value={duration.minutes}>{duration.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label htmlFor="task-priority" className="text-xs font-medium">Priority</label>
-                                <select
-                                    id="task-priority"
-                                    value={data.priority}
-                                    onChange={(event) => setData('priority', event.target.value as Priority)}
-                                    className="pm-input pm-input--flush mt-1.5 px-2.5 py-2 text-xs"
-                                >
-                                    {(Object.keys(priorityLabels) as Priority[]).map((priority) => (
-                                        <option key={priority} value={priority}>{priorityLabels[priority]}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-                    )}
-                </Popover>
-            </div>
+                        <Popover
+                            ariaLabel="More details"
+                            active={details !== ''}
+                            label={details || '⋯'}
+                        >
+                            {() => (
+                                <div className="space-y-3 px-2.5 py-2">
+                                    <div>
+                                        <label
+                                            htmlFor="task-duration"
+                                            className="text-xs font-medium"
+                                        >
+                                            How long will it take?
+                                        </label>
+                                        <select
+                                            id="task-duration"
+                                            value={data.estimate_minutes ?? ''}
+                                            onChange={(event) =>
+                                                setData(
+                                                    'estimate_minutes',
+                                                    event.target.value === ''
+                                                        ? null
+                                                        : Number(
+                                                              event.target
+                                                                  .value,
+                                                          ),
+                                                )
+                                            }
+                                            className="pm-input pm-input--flush mt-1.5 px-2.5 py-2 text-xs"
+                                        >
+                                            <option value="">Not set</option>
+                                            {durations.map((duration) => (
+                                                <option
+                                                    key={duration.minutes}
+                                                    value={duration.minutes}
+                                                >
+                                                    {duration.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label
+                                            htmlFor="task-priority"
+                                            className="text-xs font-medium"
+                                        >
+                                            Priority
+                                        </label>
+                                        <select
+                                            id="task-priority"
+                                            value={data.priority}
+                                            onChange={(event) =>
+                                                setData(
+                                                    'priority',
+                                                    event.target
+                                                        .value as Priority,
+                                                )
+                                            }
+                                            className="pm-input pm-input--flush mt-1.5 px-2.5 py-2 text-xs"
+                                        >
+                                            {(
+                                                Object.keys(
+                                                    priorityLabels,
+                                                ) as Priority[]
+                                            ).map((priority) => (
+                                                <option
+                                                    key={priority}
+                                                    value={priority}
+                                                >
+                                                    {priorityLabels[priority]}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
+                        </Popover>
+                    </div>
                 </div>
             </div>
 
             {messages.map((message, index) => (
-                <p key={index} role="alert" className="mt-2 text-sm text-red-700">{message}</p>
+                <p
+                    key={index}
+                    role="alert"
+                    className="mt-2 text-sm text-red-700"
+                >
+                    {message}
+                </p>
             ))}
         </form>
     );

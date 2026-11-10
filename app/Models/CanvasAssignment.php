@@ -33,22 +33,29 @@ class CanvasAssignment extends Model
         ];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<CanvasCourse, $this> */
     public function course(): BelongsTo
     {
         return $this->belongsTo(CanvasCourse::class, 'canvas_course_id');
     }
 
+    /** @return BelongsTo<Task, $this> */
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class);
     }
 
-    /** Work still to do: not submitted in Canvas, and its task (if any) not completed. */
+    /**
+     * Work still to do: not submitted in Canvas, and its task (if any) not completed.
+     *
+     * @param  Builder<CanvasAssignment>  $query
+     */
     public function scopeOpen(Builder $query): void
     {
         $query->where('submitted', false)

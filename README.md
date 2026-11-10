@@ -14,10 +14,10 @@ The assistant never edits data on its own: it proposes an action, you approve it
 - **Today panel and dashboard:** due-soon strip, needs-attention list, and a School page.
 - **Pomodoro focus timer.**
 - **AI assistant (local, private):**
-  - Read tools: list tasks, view the schedule, list coursework, routines, and recent changes.
-  - Proposal tools: create, update, complete, or delete tasks; plan focus sessions; create, change, or delete routines.
-  - Streams replies to the UI.
-  - Human-in-the-loop: every change is a proposal the user approves; the executor re-checks it against current data and writes what happened to the action log.
+    - Read tools: list tasks, view the schedule, list coursework, routines, and recent changes.
+    - Proposal tools: create, update, complete, or delete tasks; plan focus sessions; create, change, or delete routines.
+    - Streams replies to the UI.
+    - Human-in-the-loop: every change is a proposal the user approves; the executor re-checks it against current data and writes what happened to the action log.
 
 ## Architecture
 
@@ -32,13 +32,13 @@ React + TypeScript (Inertia)  ──►  Laravel controllers
 
 ## Tech stack
 
-| Layer | Technology |
-|---|---|
-| Backend | PHP 8.4, Laravel 13, Fortify (auth), Socialite (Google OAuth) |
-| Frontend | React 19, TypeScript, Inertia.js, Tailwind CSS 4, Vite |
-| AI | Ollama (local LLM) with tool calling |
-| Quality | Pest/PHPUnit feature tests, Vitest, PHPStan (Larastan), Laravel Pint |
-| CI | GitHub Actions: lint, type checks, and tests on every push |
+| Layer    | Technology                                                           |
+| -------- | -------------------------------------------------------------------- |
+| Backend  | PHP 8.4, Laravel 13, Fortify (auth), Socialite (Google OAuth)        |
+| Frontend | React 19, TypeScript, Inertia.js, Tailwind CSS 4, Vite               |
+| AI       | Ollama (local LLM) with tool calling                                 |
+| Quality  | Pest/PHPUnit feature tests, Vitest, PHPStan (Larastan), Laravel Pint |
+| CI       | GitHub Actions: lint, type checks, and tests on every push           |
 
 ## Getting started
 

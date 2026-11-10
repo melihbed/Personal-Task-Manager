@@ -25,11 +25,13 @@ class PomodoroSession extends Model
         return ['started_at' => 'datetime', 'paused_at' => 'datetime', 'ended_at' => 'datetime', 'planned_seconds' => 'integer', 'paused_seconds' => 'integer'];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<Task, $this> */
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class);

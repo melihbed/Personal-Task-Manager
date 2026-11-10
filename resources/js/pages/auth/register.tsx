@@ -23,7 +23,14 @@ export default function Register() {
     return (
         <AuthLayout
             title="Create your account"
-            footer={<>Already have an account? <Link href="/login" className="pm-link">Log in</Link></>}
+            footer={
+                <>
+                    Already have an account?{' '}
+                    <Link href="/login" className="pm-link">
+                        Log in
+                    </Link>
+                </>
+            }
         >
             <form onSubmit={submit} className="space-y-4">
                 <Field
@@ -51,7 +58,9 @@ export default function Register() {
                     type="password"
                     autoComplete="new-password"
                     value={data.password}
-                    onChange={(event) => setData('password', event.target.value)}
+                    onChange={(event) =>
+                        setData('password', event.target.value)
+                    }
                     error={errors.password}
                     required
                 />
@@ -61,12 +70,19 @@ export default function Register() {
                     type="password"
                     autoComplete="new-password"
                     value={data.password_confirmation}
-                    onChange={(event) => setData('password_confirmation', event.target.value)}
+                    onChange={(event) =>
+                        setData('password_confirmation', event.target.value)
+                    }
                     error={errors.password_confirmation}
                     required
                 />
 
-                <Button type="submit" loading={processing} loadingLabel="Creating account" className="w-full">
+                <Button
+                    type="submit"
+                    loading={processing}
+                    loadingLabel="Creating account"
+                    className="w-full"
+                >
                     Create account
                 </Button>
             </form>
