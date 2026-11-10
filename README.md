@@ -1,5 +1,7 @@
 # Personal Task Manager
 
+[![tests](https://github.com/melihbed/Personal-Task-Manager/actions/workflows/tests.yml/badge.svg)](https://github.com/melihbed/Personal-Task-Manager/actions/workflows/tests.yml)
+
 A personal planner that pulls coursework from **Canvas LMS** and events from **Google Calendar**, lets you schedule tasks by dragging across a calendar, and includes an **AI assistant running on a local LLM (Ollama)** that can read your schedule and propose changes.
 
 The assistant never edits data on its own: it proposes an action, you approve it, and the server re-validates the proposal before executing it and records the outcome in an action log.
